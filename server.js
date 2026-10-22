@@ -25,6 +25,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Trust reverse proxy (Google Cloud Run / Load Balancer) so req.ip and rate-limiting work accurately
+app.set('trust proxy', 1);
+
 // Security headers with helmet (configured to allow AI Studio iframe embedding)
 app.use(
   helmet({
@@ -53,7 +56,9 @@ const authLimiter = rateLimit({
   max: 30, // Limit each IP to 30 login requests per window
   message: { error: 'Too many authentication attempts. Please try again after 15 minutes.' },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1',
+  validate: false // Disable built-in proxy header validation warnings when running behind cloud reverse proxies
 });
 
 // Serve static frontend files from /public both at root and /public

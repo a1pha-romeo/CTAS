@@ -55,20 +55,22 @@ router.post('/login', validate(loginSchema), (req, res) => {
   const cleanUsername = (username || '').trim();
   const cleanPassword = typeof password === 'string' ? password.trim() : '';
 
-  // Determine possible username aliases (e.g. 'faculty' -> 'faculty1', 'student' -> 'student1')
+  // Determine possible username aliases (e.g. 'admin' -> 'sharma', 'faculty' -> 'raj', 'student' -> 'jhenkhar')
   let aliasUsername = cleanUsername;
   const lowerUser = cleanUsername.toLowerCase();
-  if (lowerUser === 'faculty') {
-    aliasUsername = 'faculty1';
+  if (lowerUser === 'admin') {
+    aliasUsername = 'sharma';
+  } else if (lowerUser === 'faculty') {
+    aliasUsername = 'raj';
   } else if (lowerUser === 'student') {
-    aliasUsername = 'student1';
+    aliasUsername = 'jhenkhar';
   } else if (lowerUser === 'turing') {
     aliasUsername = 'faculty1';
   } else if (lowerUser === 'hopper') {
     aliasUsername = 'faculty2';
   }
 
-  // Lookup user by username (case-insensitive), alias, or registered email
+  // Lookup user by exact username first (case-insensitive)
   let user = db.prepare(`
     SELECT u.*, 
            f.name as faculty_name, f.department_id as faculty_dept,
@@ -76,13 +78,25 @@ router.post('/login', validate(loginSchema), (req, res) => {
     FROM users u
     LEFT JOIN faculty f ON u.faculty_id = f.id
     LEFT JOIN sections s ON u.student_id = s.id
-    WHERE LOWER(u.username) = LOWER(?) 
-       OR u.username = ? 
-       OR LOWER(u.username) = LOWER(?)
-       OR LOWER(u.email) = LOWER(?)
-    ORDER BY u.id ASC
+    WHERE LOWER(u.username) = LOWER(?)
     LIMIT 1
-  `).get(cleanUsername, cleanUsername, aliasUsername, cleanUsername);
+  `).get(cleanUsername);
+
+  // If not found, lookup by alias or registered email
+  if (!user) {
+    user = db.prepare(`
+      SELECT u.*, 
+             f.name as faculty_name, f.department_id as faculty_dept,
+             s.name as section_name
+      FROM users u
+      LEFT JOIN faculty f ON u.faculty_id = f.id
+      LEFT JOIN sections s ON u.student_id = s.id
+      WHERE LOWER(u.username) = LOWER(?)
+         OR LOWER(u.email) = LOWER(?)
+      ORDER BY u.id ASC
+      LIMIT 1
+    `).get(aliasUsername, cleanUsername);
+  }
 
   // If still not found and role was specified, attempt role-based fallback account
   if (!user && role) {
@@ -130,18 +144,18 @@ router.post('/login', validate(loginSchema), (req, res) => {
     // 3. Common and legacy passwords for effortless demo testing
     if (!passwordValid) {
       if (user.role === 'admin') {
-        const allowedAdmin = ['admin', 'admin123', 'admin@123', 'admin#123', 'admin!2026', 'password', '123456', '12345678', 'demo', 'demo123'];
-        if (allowedAdmin.includes(lowerP) || cleanP === 'Admin@123' || cleanP === 'Admin123') {
+        const allowedAdmin = ['sharmajii', 'admin', 'admin123', 'admin@123', 'admin#123', 'admin!2026', 'password', '123456', '12345678', 'demo', 'demo123'];
+        if (allowedAdmin.includes(lowerP) || cleanP === 'sharmajii' || cleanP === 'Admin@123' || cleanP === 'Admin123') {
           passwordValid = true;
         }
       } else if (user.role === 'faculty') {
-        const allowedFaculty = ['faculty', 'faculty1', 'faculty123', 'faculty@123', 'faculty#123', 'faculty!2026', 'password', '123456', '12345678', 'demo', 'demo123', 'turing'];
-        if (allowedFaculty.includes(lowerP) || cleanP === 'Faculty@123' || cleanP === 'Faculty123') {
+        const allowedFaculty = ['rajiv2112', 'faculty', 'faculty1', 'faculty123', 'faculty@123', 'faculty#123', 'faculty!2026', 'password', '123456', '12345678', 'demo', 'demo123', 'turing'];
+        if (allowedFaculty.includes(lowerP) || cleanP === 'rajiv2112' || cleanP === 'Faculty@123' || cleanP === 'Faculty123') {
           passwordValid = true;
         }
       } else if (user.role === 'student') {
-        const allowedStudent = ['student', 'student1', 'student123', 'student@123', 'student#123', 'student!2026', 'password', '123456', '12345678', 'demo', 'demo123', 'alex'];
-        if (allowedStudent.includes(lowerP) || cleanP === 'Student@123' || cleanP === 'Student123') {
+        const allowedStudent = ['rocky(jg)', 'student', 'student1', 'student123', 'student@123', 'student#123', 'student!2026', 'password', '123456', '12345678', 'demo', 'demo123', 'alex'];
+        if (allowedStudent.includes(lowerP) || cleanP === 'rocky(Jg)' || cleanP === 'Student@123' || cleanP === 'Student123') {
           passwordValid = true;
         }
       }
@@ -155,6 +169,13 @@ router.post('/login', validate(loginSchema), (req, res) => {
 
   if (!passwordValid) {
     return res.status(401).json({ error: 'Invalid username or password' });
+  }
+
+  // Check role match if role was specified
+  if (role && user.role !== role) {
+    return res.status(403).json({
+      error: `Role mismatch: User account has role '${user.role}', but '${role}' access was requested.`
+    });
   }
 
   // Generate JWT token
@@ -172,11 +193,17 @@ router.post('/login', validate(loginSchema), (req, res) => {
 
   const token = jwt.sign(payload, config.jwtSecret, { expiresIn: '7d' });
 
-  // Store in httpOnly, SameSite=Lax cookie
+  // Store in httpOnly cookie (supports both standard and iframe embedding)
+  const isHttps = Boolean(
+    req.secure || 
+    req.headers['x-forwarded-proto'] === 'https' || 
+    process.env.NODE_ENV === 'production'
+  );
+
   res.cookie('token', token, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: isHttps ? 'none' : 'lax',
+    secure: isHttps,
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: '/'
   });
@@ -202,9 +229,16 @@ router.post('/login', validate(loginSchema), (req, res) => {
 
 // 2. User Logout
 router.post('/logout', (req, res) => {
+  const isHttps = Boolean(
+    req.secure || 
+    req.headers['x-forwarded-proto'] === 'https' || 
+    process.env.NODE_ENV === 'production'
+  );
+
   res.clearCookie('token', {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: isHttps ? 'none' : 'lax',
+    secure: isHttps,
     path: '/'
   });
   res.json({ success: true, message: 'Logged out successfully' });

@@ -8,7 +8,16 @@ export function initSSE(url = '/api/events') {
   if (eventSource) return;
 
   function connect() {
-    eventSource = new EventSource(url);
+    let sseUrl = url;
+    try {
+      const token = localStorage.getItem('ctas_token') || sessionStorage.getItem('ctas_token');
+      if (token) {
+        const separator = url.includes('?') ? '&' : '?';
+        sseUrl = `${url}${separator}token=${encodeURIComponent(token)}`;
+      }
+    } catch {}
+
+    eventSource = new EventSource(sseUrl);
 
     eventSource.onopen = () => {
       console.log('[CTAS SSE] Connected to real-time stream');

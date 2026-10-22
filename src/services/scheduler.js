@@ -1,5 +1,28 @@
 import { getDatabase } from '../db/connection.js';
 import { validateTimetable } from './validator.js';
+import { broadcast } from './sse.js';
+
+let activeGenerationState = {
+  isRunning: false,
+  progress: 0,
+  phase: 'idle',
+  startedAt: null,
+  name: null,
+  createdBy: null,
+  versionId: null,
+  entriesCount: 0
+};
+
+export function getGenerationState() {
+  return {
+    ...activeGenerationState,
+    elapsedMs: activeGenerationState.startedAt ? Date.now() - activeGenerationState.startedAt : 0
+  };
+}
+
+export function isGenerationInProgress() {
+  return activeGenerationState.isRunning;
+}
 
 /**
  * Class Timetable Automation System (CTAS) - CSP Scheduling Engine
@@ -14,6 +37,28 @@ export function generateTimetable(options = {}) {
   const startTime = Date.now();
   const maxDurationMs = options.maxDurationMs || 20000; // 20s default timeout
   const maxAttempts = options.maxAttempts || 5;
+
+  if (activeGenerationState.isRunning && !options.skipLock) {
+    return {
+      success: false,
+      alreadyRunning: true,
+      reason: 'A timetable generation computation is currently active in the background. Please wait for completion.',
+      state: getGenerationState()
+    };
+  }
+
+  try {
+    activeGenerationState = {
+      isRunning: true,
+      progress: 5,
+      phase: 'Phase 1: Validating Master Data Feasibility...',
+      startedAt: startTime,
+      name: options.name || 'Draft Schedule',
+      createdBy: options.createdBy || null,
+      versionId: null,
+      entriesCount: 0
+    };
+    broadcast('timetable.generation_progress', getGenerationState());
 
   // 1. Fetch Master Data from Database
   const days = db.prepare('SELECT * FROM working_days WHERE is_active = 1 ORDER BY day_index ASC').all();
@@ -64,10 +109,13 @@ export function generateTimetable(options = {}) {
       .reduce((sum, ss) => sum + ss.weekly_periods, 0);
 
     if (requiredPeriods > totalAvailableSlotsPerSection) {
+      const reason = `Section ${sec.name} requires ${requiredPeriods} periods, but only ${totalAvailableSlotsPerSection} teaching slots exist in a week.`;
+      activeGenerationState.isRunning = false;
+      broadcast('timetable.generation_failed', { reason });
       return {
         success: false,
         infeasible: true,
-        reason: `Section ${sec.name} requires ${requiredPeriods} periods, but only ${totalAvailableSlotsPerSection} teaching slots exist in a week.`
+        reason
       };
     }
   }
@@ -79,10 +127,13 @@ export function generateTimetable(options = {}) {
       .reduce((sum, ss) => sum + ss.weekly_periods, 0);
 
     if (assignedPeriods > fac.max_periods_per_week) {
+      const reason = `Faculty ${fac.name} is assigned ${assignedPeriods} weekly periods, exceeding maximum weekly limit of ${fac.max_periods_per_week}.`;
+      activeGenerationState.isRunning = false;
+      broadcast('timetable.generation_failed', { reason });
       return {
         success: false,
         infeasible: true,
-        reason: `Faculty ${fac.name} is assigned ${assignedPeriods} weekly periods, exceeding maximum weekly limit of ${fac.max_periods_per_week}.`
+        reason
       };
     }
   }
@@ -126,6 +177,10 @@ export function generateTimetable(options = {}) {
     }
   }
 
+  activeGenerationState.progress = 20;
+  activeGenerationState.phase = `Phase 2: Prepared ${placementTasks.length} discrete placement tasks using MRV heuristic`;
+  broadcast('timetable.generation_progress', getGenerationState());
+
   // Suitable rooms per subject type and section strength
   const suitableRoomsMap = new Map();
   for (const task of placementTasks) {
@@ -163,6 +218,11 @@ export function generateTimetable(options = {}) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (Date.now() - startTime > maxDurationMs) break;
+
+    const attemptProgress = 25 + Math.round((attempt / maxAttempts) * 45);
+    activeGenerationState.progress = attemptProgress;
+    activeGenerationState.phase = `Phase 3: Backtracking CSP search (Attempt ${attempt}/${maxAttempts})...`;
+    broadcast('timetable.generation_progress', getGenerationState());
 
     const orderedTasks = sortTasks(placementTasks, attempt > 1);
 
@@ -358,14 +418,25 @@ export function generateTimetable(options = {}) {
   }
 
   if (!solutionEntries) {
+    const reason = 'No feasible schedule could be discovered within the constraint bounds. Try relaxing room capacities or faculty max period limits.';
+    activeGenerationState.isRunning = false;
+    broadcast('timetable.generation_failed', { reason });
     return {
       success: false,
-      reason: 'No feasible schedule could be discovered within the constraint bounds. Try relaxing room capacities or faculty max period limits.'
+      reason
     };
   }
 
   // 6. Local-Search Improvement Pass (Hill climbing on soft scores)
+  activeGenerationState.progress = 80;
+  activeGenerationState.phase = 'Phase 4: Local-search hill climbing on soft constraints';
+  broadcast('timetable.generation_progress', getGenerationState());
+
   solutionEntries = localSearchOptimization(solutionEntries, days, teachingSlots, suitableRoomsMap);
+
+  activeGenerationState.progress = 92;
+  activeGenerationState.phase = 'Phase 5: Verifying 0-collision integrity and persisting draft...';
+  broadcast('timetable.generation_progress', getGenerationState());
 
   // 7. Save Draft Timetable Version to Database
   const saveTransaction = db.transaction(() => {
@@ -415,11 +486,34 @@ export function generateTimetable(options = {}) {
 
   const summary = saveTransaction();
 
+  activeGenerationState.progress = 100;
+  activeGenerationState.phase = 'Complete: Conflict-free schedule persisted successfully';
+  activeGenerationState.versionId = summary.versionId;
+  activeGenerationState.entriesCount = summary.entriesCount;
+
+  broadcast('timetable.generation_completed', {
+    ...getGenerationState(),
+    versionId: summary.versionId,
+    versionName: summary.versionName,
+    entriesCount: summary.entriesCount,
+    durationMs: summary.durationMs,
+    score: summary.score
+  });
+
   return {
     success: true,
     ...summary,
     message: `Generated conflict-free timetable draft with ${summary.entriesCount} entries in ${summary.durationMs}ms.`
   };
+  } catch (err) {
+    activeGenerationState.isRunning = false;
+    broadcast('timetable.generation_failed', {
+      reason: err.message || 'Generation computation failed unexpectedly'
+    });
+    throw err;
+  } finally {
+    activeGenerationState.isRunning = false;
+  }
 }
 
 /**

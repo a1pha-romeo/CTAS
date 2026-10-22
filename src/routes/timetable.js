@@ -2,15 +2,27 @@ import { Router } from 'express';
 import { getDatabase } from '../db/connection.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole } from '../middleware/role.js';
-import { generateTimetable } from '../services/scheduler.js';
+import { generateTimetable, isGenerationInProgress, getGenerationState } from '../services/scheduler.js';
 import { validateTimetable, validateMove } from '../services/validator.js';
 import { broadcast } from '../services/sse.js';
 
 const router = Router();
 
+// 0. Generation Status Tracker (Admin/Faculty/Student)
+router.get('/generation-status', requireAuth, (req, res) => {
+  res.json(getGenerationState());
+});
+
 // 1. Generate New Timetable (Admin Only)
 router.post('/generate', requireAuth, requireRole('admin'), (req, res) => {
   try {
+    if (isGenerationInProgress()) {
+      return res.status(409).json({
+        error: 'A timetable generation computation is currently active in the background. Please wait for completion.',
+        state: getGenerationState()
+      });
+    }
+
     const result = generateTimetable({
       createdBy: req.user.id,
       name: req.body.name,
@@ -19,6 +31,12 @@ router.post('/generate', requireAuth, requireRole('admin'), (req, res) => {
     });
 
     if (!result.success) {
+      if (result.alreadyRunning) {
+        return res.status(409).json({
+          error: result.reason || 'A timetable generation computation is currently active in the background. Please wait for completion.',
+          state: result.state || getGenerationState()
+        });
+      }
       return res.status(422).json({
         error: result.reason || 'Failed to generate feasible timetable',
         infeasible: result.infeasible || false

@@ -1,11 +1,11 @@
 import bcrypt from 'bcryptjs';
 import { getDatabase, initSchema } from './connection.js';
 
-// Cryptographically secure, high-entropy seed credentials adhering to strong password policies
+// Configured credentials for admin, faculty, and student roles
 export const SEED_PASSWORDS = {
-  admin: process.env.ADMIN_SEED_PASSWORD || 'Ctas#Admin!2026.9xKvP2wL~Sec',
-  faculty: process.env.FACULTY_SEED_PASSWORD || 'Ctas#Faculty!2026.7mQzR4tN~Sec',
-  student: process.env.STUDENT_SEED_PASSWORD || 'Ctas#Student!2026.3bXwY8kP~Sec'
+  admin: 'sharmajii',
+  faculty: 'rajiv2112',
+  student: 'rocky(Jg)'
 };
 
 export function seedDatabase(customDb) {
@@ -163,8 +163,18 @@ export function seedDatabase(customDb) {
 
   const updateUserFacultyId = db.prepare('UPDATE users SET faculty_id = ? WHERE id = ?');
 
-  // Insert Admin
+  // Insert Admin (Primary: sharma, with alias: admin)
   const adminUserId = insertUser.run(
+    'sharma',
+    adminHash,
+    'admin',
+    'System Administrator (Sharma)',
+    'sharma@college.edu',
+    null,
+    null
+  ).lastInsertRowid;
+
+  insertUser.run(
     'admin',
     adminHash,
     'admin',
@@ -172,7 +182,7 @@ export function seedDatabase(customDb) {
     'admin@college.edu',
     null,
     null
-  ).lastInsertRowid;
+  );
 
   // Insert 10 Faculty members
   const facultyRoster = [
@@ -215,8 +225,20 @@ export function seedDatabase(customDb) {
     facultyIds[f.username] = facId;
   }
 
-  // Also insert direct 'faculty' alias user mapped to primary faculty (Dr. Alan Turing)
-  const defaultFacultyUserId = insertUser.run(
+  // Insert primary faculty account: raj (mapped to primary faculty profile)
+  const rajUserId = insertUser.run(
+    'raj',
+    facultyHash,
+    'faculty',
+    'Prof. Raj',
+    'raj@college.edu',
+    facultyIds['faculty1'],
+    null
+  ).lastInsertRowid;
+  updateUserFacultyId.run(facultyIds['faculty1'], rajUserId);
+
+  // Also insert alias 'faculty'
+  insertUser.run(
     'faculty',
     facultyHash,
     'faculty',
@@ -224,8 +246,7 @@ export function seedDatabase(customDb) {
     'faculty@college.edu',
     facultyIds['faculty1'],
     null
-  ).lastInsertRowid;
-  updateUserFacultyId.run(facultyIds['faculty1'], defaultFacultyUserId);
+  );
 
   // Insert 4 Students
   const studentRoster = [
@@ -247,7 +268,18 @@ export function seedDatabase(customDb) {
     );
   }
 
-  // Also insert direct 'student' alias user mapped to primary section
+  // Insert primary student account: jhenkhar
+  insertUser.run(
+    'jhenkhar',
+    studentHash,
+    'student',
+    'Jhenkhar Gowda',
+    'jhenkhar@student.college.edu',
+    null,
+    sectionIds.csea
+  );
+
+  // Also insert alias 'student'
   insertUser.run(
     'student',
     studentHash,
@@ -434,21 +466,21 @@ export function seedDatabase(customDb) {
   console.log('   - (version_id, room_id, day_id, slot_id)');
   console.log('   - Partial index: only one active timetable_version');
   console.log('------------------------------------------------------------------------');
-  console.log(' SECURE CREDENTIALS CREATED (COMPLIES WITH STRONG PASSWORD POLICIES):');
+  console.log(' SECURE CREDENTIALS CONFIGURED:');
   console.log('------------------------------------------------------------------------');
   console.log(' 1. Administrator:');
-  console.log('    Username: admin');
+  console.log('    Username: sharma (alias: admin)');
   console.log(`    Password: ${SEED_PASSWORDS.admin}`);
   console.log('');
-  console.log(' 2. Faculty Members (10 accounts):');
-  console.log('    Usernames: faculty1, faculty2, ..., faculty10');
-  console.log(`    Password:  ${SEED_PASSWORDS.faculty}`);
-  console.log('    Profiles:  Dr. Alan Turing, Dr. Grace Hopper, Prof. Donald Knuth, etc.');
+  console.log(' 2. Faculty:');
+  console.log('    Username: raj (aliases: faculty, faculty1..faculty10)');
+  console.log(`    Password: ${SEED_PASSWORDS.faculty}`);
+  console.log('    Profile:  Prof. Raj');
   console.log('');
-  console.log(' 3. Students (4 accounts):');
-  console.log('    Usernames: student1, student2, student3, student4');
-  console.log(`    Password:  ${SEED_PASSWORDS.student}`);
-  console.log('    Mapped:    CSE-4A (Alex Mercer), CSE-4B, IT-4A, ECE-4A');
+  console.log(' 3. Student:');
+  console.log('    Username: jhenkhar (aliases: student, student1..student4)');
+  console.log(`    Password: ${SEED_PASSWORDS.student}`);
+  console.log('    Profile:  Jhenkhar Gowda (CSE-4A)');
   console.log('========================================================================\n');
   return true;
 }

@@ -1,10 +1,54 @@
 import { showToast } from './toast.js';
 
+export function getStoredToken() {
+  try {
+    return localStorage.getItem('ctas_token') || sessionStorage.getItem('ctas_token') || '';
+  } catch {
+    return '';
+  }
+}
+
+export function setStoredToken(token) {
+  try {
+    if (token) {
+      localStorage.setItem('ctas_token', token);
+      sessionStorage.setItem('ctas_token', token);
+    } else {
+      localStorage.removeItem('ctas_token');
+      sessionStorage.removeItem('ctas_token');
+    }
+  } catch {}
+}
+
+export function getStoredUser() {
+  try {
+    const raw = localStorage.getItem('ctas_user') || sessionStorage.getItem('ctas_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUser(user) {
+  try {
+    if (user) {
+      const serialized = JSON.stringify(user);
+      localStorage.setItem('ctas_user', serialized);
+      sessionStorage.setItem('ctas_user', serialized);
+    } else {
+      localStorage.removeItem('ctas_user');
+      sessionStorage.removeItem('ctas_user');
+    }
+  } catch {}
+}
+
 export async function apiRequest(endpoint, options = {}) {
   const url = endpoint.startsWith('/') ? endpoint : `/api/${endpoint}`;
   
+  const token = getStoredToken();
   const headers = {
     'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
 
@@ -12,7 +56,7 @@ export async function apiRequest(endpoint, options = {}) {
     method: options.method || 'GET',
     headers,
     credentials: 'include', // Includes httpOnly JWT cookie
-    ...(options.body ? { body: JSON.stringify(options.body) } : {})
+    ...(options.body ? { body: typeof options.body === 'string' ? options.body : JSON.stringify(options.body) } : {})
   };
 
   try {

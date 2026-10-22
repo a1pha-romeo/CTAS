@@ -2,7 +2,17 @@ import jwt from 'jsonwebtoken';
 import config from '../config/env.js';
 
 export function requireAuth(req, res, next) {
-  const token = req.cookies?.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+  const authHeader = req.headers.authorization;
+  let bearerToken = null;
+  if (authHeader) {
+    if (authHeader.toLowerCase().startsWith('bearer ')) {
+      bearerToken = authHeader.slice(7).trim();
+    } else {
+      bearerToken = authHeader.split(' ')[1] || authHeader.trim();
+    }
+  }
+
+  const token = req.cookies?.token || bearerToken || req.query?.token;
   const url = req.originalUrl || (req.baseUrl + req.path);
 
   if (!token) {
@@ -26,7 +36,17 @@ export function requireAuth(req, res, next) {
 }
 
 export function optionalAuth(req, res, next) {
-  const token = req.cookies?.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+  const authHeader = req.headers.authorization;
+  let bearerToken = null;
+  if (authHeader) {
+    if (authHeader.toLowerCase().startsWith('bearer ')) {
+      bearerToken = authHeader.slice(7).trim();
+    } else {
+      bearerToken = authHeader.split(' ')[1] || authHeader.trim();
+    }
+  }
+
+  const token = req.cookies?.token || bearerToken || req.query?.token;
   if (token) {
     try {
       req.user = jwt.verify(token, config.jwtSecret);

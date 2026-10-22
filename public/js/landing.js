@@ -86,9 +86,18 @@ document.addEventListener('DOMContentLoaded', () => {
         switchAuthView('login');
         if (usernameInput && passwordInput) {
           const currentU = usernameInput.value.trim().toLowerCase();
-          if (!currentU || currentU === 'admin' || currentU === 'faculty' || currentU === 'student') {
-            usernameInput.value = r;
-            passwordInput.value = r;
+          const knownUsers = ['admin', 'faculty', 'student', 'sharma', 'raj', 'jhenkhar'];
+          if (!currentU || knownUsers.includes(currentU)) {
+            if (r === 'admin') {
+              usernameInput.value = 'sharma';
+              passwordInput.value = 'sharmajii';
+            } else if (r === 'faculty') {
+              usernameInput.value = 'raj';
+              passwordInput.value = 'rajiv2112';
+            } else if (r === 'student') {
+              usernameInput.value = 'jhenkhar';
+              passwordInput.value = 'rocky(Jg)';
+            }
           }
         }
       }
@@ -148,10 +157,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Prefill default admin credentials on initial load for instant convenience
   if (usernameInput && !usernameInput.value) {
-    usernameInput.value = 'admin';
+    usernameInput.value = 'sharma';
   }
   if (passwordInput && !passwordInput.value) {
-    passwordInput.value = 'admin';
+    passwordInput.value = 'sharmajii';
   }
 
   // Form submit handler
@@ -169,13 +178,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // Auto-adjust selectedRole to match username if clearly indicated
       const val = username.toLowerCase();
       let roleToUse = selectedRole;
-      if (val.startsWith('faculty') && roleToUse !== 'faculty') {
+      if ((val.startsWith('faculty') || val === 'raj') && roleToUse !== 'faculty') {
         roleToUse = 'faculty';
         setRole('faculty');
-      } else if (val.startsWith('student') && roleToUse !== 'student') {
+      } else if ((val.startsWith('student') || val === 'jhenkhar') && roleToUse !== 'student') {
         roleToUse = 'student';
         setRole('student');
-      } else if (val === 'admin' && roleToUse !== 'admin') {
+      } else if ((val === 'admin' || val === 'sharma') && roleToUse !== 'admin') {
         roleToUse = 'admin';
         setRole('admin');
       }
@@ -201,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-instant-demo')?.addEventListener('click', async () => {
     showToast('Starting instant presentation demo mode...', 'info');
     try {
-      await login('admin', 'Ctas#Admin!2026.9xKvP2wL~Sec', 'admin');
+      await login('sharma', 'sharmajii', 'admin');
     } catch (err) {
       showToast('Demo login failed: ' + err.message, 'error');
     }

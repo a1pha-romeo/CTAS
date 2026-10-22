@@ -1,4 +1,4 @@
-import { apiRequest } from './api.js';
+import { apiRequest, setStoredToken, setStoredUser, getStoredUser, getStoredToken } from './api.js';
 import { showToast } from './toast.js';
 
 export async function login(username, password, role) {
@@ -8,7 +8,14 @@ export async function login(username, password, role) {
       body: { username, password, role }
     });
 
-    showToast(`Welcome, ${data.user.fullName || data.user.username}!`, 'success');
+    if (data?.token) {
+      setStoredToken(data.token);
+    }
+    if (data?.user) {
+      setStoredUser(data.user);
+    }
+
+    showToast(`Welcome, ${data.user.fullName || data.user.full_name || data.user.username}!`, 'success');
 
     // Route to actual user role dashboard
     const targetRole = data?.user?.role || role || 'admin';
@@ -17,7 +24,7 @@ export async function login(username, password, role) {
       else if (targetRole === 'faculty') window.location.href = '/faculty/';
       else if (targetRole === 'student') window.location.href = '/student/';
       else window.location.href = '/';
-    }, 350);
+    }, 200);
 
     return data;
   } catch (err) {
@@ -27,24 +34,44 @@ export async function login(username, password, role) {
 }
 
 export async function logout() {
+  setStoredToken(null);
+  setStoredUser(null);
   try {
     await apiRequest('/api/auth/logout', { method: 'POST', showErrorToast: false });
     showToast('Logged out successfully', 'info');
+  } catch (err) {
+    // Ignore error on logout
+  } finally {
     setTimeout(() => {
       window.location.href = '/';
-    }, 200);
-  } catch (err) {
-    window.location.href = '/';
+    }, 150);
   }
 }
 
 export async function getCurrentUser() {
+  const token = getStoredToken();
+
   try {
     const res = await apiRequest('/api/auth/me', { showErrorToast: false });
-    return res.user;
-  } catch {
-    return null;
+    if (res?.user) {
+      setStoredUser(res.user);
+      return res.user;
+    }
+  } catch (err) {
+    // If explicit 401/403 returned, authentication is expired/invalid
+    if (err.status === 401 || err.status === 403) {
+      setStoredToken(null);
+      setStoredUser(null);
+      return null;
+    }
+
+    // For transient network errors, if token and cached user exist, fallback to cached user
+    const cachedUser = getStoredUser();
+    if (cachedUser && token) {
+      return cachedUser;
+    }
   }
+  return null;
 }
 
 export async function checkSession(expectedRole) {
@@ -66,12 +93,12 @@ export async function checkSession(expectedRole) {
   // Populate header user badge if present
   const userDisplay = document.getElementById('user-display-name');
   if (userDisplay) {
-    userDisplay.textContent = user.full_name || user.username;
+    userDisplay.textContent = user.fullName || user.full_name || user.username;
   }
 
   const roleBadge = document.getElementById('user-role-badge');
   if (roleBadge) {
-    roleBadge.textContent = user.role.toUpperCase();
+    roleBadge.textContent = (user.role || '').toUpperCase();
   }
 
   return user;

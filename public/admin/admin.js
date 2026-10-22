@@ -11,6 +11,11 @@ let studioMode = 'section'; // 'section' | 'faculty' | 'room'
 let studioEntityId = null;
 let draggedEntryId = null;
 
+// CSP Timetable Generation Progress Tracker State
+let isGenerationRunning = false;
+let generationStartTime = null;
+let generationTimerInterval = null;
+
 document.addEventListener('DOMContentLoaded', async () => {
   const user = await checkSession('admin');
   if (!user) return;
@@ -22,6 +27,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (currentTab === 'studio') loadStudioVersion(activeVersionId);
     if (currentTab === 'overview') loadOverview();
   });
+
+  // Real-time CSP Timetable Generation Progress & Lock Events
+  onEvent('timetable.generation_progress', (data) => {
+    updateGenerationProgress(data);
+  });
+  onEvent('timetable.generation_completed', (data) => {
+    onGenerationCompleted(data);
+  });
+  onEvent('timetable.generation_failed', (data) => {
+    onGenerationFailed(data);
+  });
+
   onEvent('absence:created', (data) => {
     showToast(`Faculty notice: ${data.facultyName} reported ${data.type} on ${data.date}`, 'warning');
     if (currentTab === 'absence') loadAbsenceMonitor();
@@ -40,6 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupNavigation();
   setupModals();
+  await checkGenerationStatus();
   await loadOverview();
   await loadMasterData();
 });
@@ -585,30 +603,402 @@ function attachDragAndDropHandlers() {
   });
 }
 
-// 4. Modal Setup
+// 4. Modal Setup & CSP Generation Progress Tracker
+function formatElapsed(ms) {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function updateGenerationProgress(data) {
+  if (!data) return;
+  isGenerationRunning = !!data.isRunning;
+
+  const banner = document.getElementById('global-generation-banner');
+  const modalBox = document.getElementById('modal-gen-progress-box');
+
+  if (banner) {
+    banner.style.display = 'block';
+    banner.style.borderColor = 'var(--color-brand-primary)';
+
+    const icon = document.getElementById('gen-banner-icon');
+    if (icon) {
+      icon.textContent = '⚙️';
+      icon.style.animation = 'spin 2s linear infinite';
+    }
+
+    const badge = document.getElementById('gen-banner-badge');
+    if (badge) {
+      badge.textContent = 'CSP Engine Active';
+      badge.style.background = 'var(--color-brand-blush-soft)';
+      badge.style.color = 'var(--color-brand-primary)';
+    }
+
+    const lockBadge = document.getElementById('gen-banner-lock-badge');
+    if (lockBadge) lockBadge.style.display = 'inline-block';
+
+    const title = document.getElementById('gen-banner-title');
+    if (title) {
+      title.textContent = data.name 
+        ? `Computing Timetable: "${data.name}"`
+        : 'Constraint Satisfaction Generation in Progress';
+    }
+
+    const phaseEl = document.getElementById('gen-banner-phase');
+    if (phaseEl) phaseEl.textContent = data.phase || 'Evaluating CSP constraints...';
+
+    const percent = Math.min(100, Math.max(5, data.progress || 5));
+    const progressBar = document.getElementById('gen-banner-progress-bar');
+    if (progressBar) progressBar.style.width = `${percent}%`;
+
+    const percentEl = document.getElementById('gen-banner-percent');
+    if (percentEl) percentEl.textContent = `${percent}%`;
+
+    const stageLabel = document.getElementById('gen-banner-stage-label');
+    if (stageLabel) {
+      if (percent < 20) stageLabel.textContent = 'Phase 1/5: Feasibility Validation';
+      else if (percent < 45) stageLabel.textContent = 'Phase 2/5: MRV Task Sequencing';
+      else if (percent < 75) stageLabel.textContent = 'Phase 3/5: Backtracking CSP Search';
+      else if (percent < 95) stageLabel.textContent = 'Phase 4/5: Soft-Constraint Scoring & Optimization';
+      else stageLabel.textContent = 'Phase 5/5: Zero-Collision Verification & Commit';
+    }
+  }
+
+  // Update in-modal tracker
+  if (modalBox) {
+    modalBox.style.display = 'block';
+    const percent = Math.min(100, Math.max(5, data.progress || 5));
+    const mPhase = document.getElementById('modal-gen-phase-text');
+    if (mPhase) mPhase.textContent = data.phase || 'Computing Schedule...';
+    const mBar = document.getElementById('modal-gen-progress-bar');
+    if (mBar) mBar.style.width = `${percent}%`;
+    const mPct = document.getElementById('modal-gen-percent');
+    if (mPct) mPct.textContent = `${percent}%`;
+
+    updateStepBullets(percent);
+  }
+
+  // Handle timer
+  if (data.startedAt) {
+    generationStartTime = data.startedAt;
+  } else if (!generationStartTime) {
+    generationStartTime = Date.now() - (data.elapsedMs || 0);
+  }
+
+  startGenerationTimer();
+  updateGenerationButtons(true);
+}
+
+function updateStepBullets(percent) {
+  const steps = [
+    { id: 'step-1', bullet: 'step-1-bullet', threshold: 10 },
+    { id: 'step-2', bullet: 'step-2-bullet', threshold: 25 },
+    { id: 'step-3', bullet: 'step-3-bullet', threshold: 55 },
+    { id: 'step-4', bullet: 'step-4-bullet', threshold: 85 },
+    { id: 'step-5', bullet: 'step-5-bullet', threshold: 100 }
+  ];
+
+  steps.forEach(s => {
+    const el = document.getElementById(s.id);
+    const b = document.getElementById(s.bullet);
+    if (!el || !b) return;
+
+    if (percent >= s.threshold) {
+      b.textContent = '✓';
+      b.style.color = 'var(--color-success)';
+      el.style.color = 'var(--color-success)';
+      el.style.fontWeight = '600';
+    } else {
+      b.textContent = '○';
+      b.style.color = 'var(--text-muted)';
+      el.style.color = 'var(--text-secondary)';
+      el.style.fontWeight = 'normal';
+    }
+  });
+}
+
+function startGenerationTimer() {
+  if (generationTimerInterval) return;
+  const timerEl = document.getElementById('gen-banner-timer');
+
+  generationTimerInterval = setInterval(() => {
+    if (!generationStartTime) return;
+    const elapsed = Date.now() - generationStartTime;
+    if (timerEl) timerEl.textContent = `Elapsed: ${formatElapsed(elapsed)}`;
+  }, 200);
+}
+
+function stopGenerationTimer() {
+  if (generationTimerInterval) {
+    clearInterval(generationTimerInterval);
+    generationTimerInterval = null;
+  }
+}
+
+function updateGenerationButtons(isLocked) {
+  const overviewBtn = document.getElementById('btn-overview-generate');
+  const studioBtn = document.getElementById('btn-studio-generate');
+  const submitBtn = document.getElementById('btn-submit-generate');
+  const dismissBtn = document.getElementById('gen-banner-dismiss-btn');
+
+  if (isLocked) {
+    if (overviewBtn) {
+      overviewBtn.disabled = true;
+      overviewBtn.textContent = '⏳ Computation Active...';
+      overviewBtn.title = 'A timetable generation computation is active in the background. Duplicate runs are locked.';
+      overviewBtn.style.opacity = '0.7';
+    }
+    if (studioBtn) {
+      studioBtn.disabled = true;
+      studioBtn.textContent = '⏳ Computation Active...';
+      studioBtn.title = 'A timetable generation computation is active in the background. Duplicate runs are locked.';
+      studioBtn.style.opacity = '0.7';
+    }
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ CSP Solver Running...';
+    }
+    if (dismissBtn) dismissBtn.style.display = 'none';
+  } else {
+    if (overviewBtn) {
+      overviewBtn.disabled = false;
+      overviewBtn.textContent = '+ Generate New Timetable';
+      overviewBtn.title = '';
+      overviewBtn.style.opacity = '1';
+    }
+    if (studioBtn) {
+      studioBtn.disabled = false;
+      studioBtn.textContent = 'Generate New';
+      studioBtn.title = '';
+      studioBtn.style.opacity = '1';
+    }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Start CSP Generator';
+    }
+  }
+}
+
+function onGenerationCompleted(data) {
+  isGenerationRunning = false;
+  stopGenerationTimer();
+  updateGenerationButtons(false);
+
+  const banner = document.getElementById('global-generation-banner');
+  if (banner) {
+    banner.style.display = 'block';
+    banner.style.borderColor = 'var(--color-success)';
+
+    const icon = document.getElementById('gen-banner-icon');
+    if (icon) {
+      icon.textContent = '✓';
+      icon.style.animation = 'none';
+    }
+
+    const badge = document.getElementById('gen-banner-badge');
+    if (badge) {
+      badge.textContent = 'Generation Complete';
+      badge.style.background = 'var(--color-success-bg)';
+      badge.style.color = 'var(--color-success)';
+    }
+
+    const lockBadge = document.getElementById('gen-banner-lock-badge');
+    if (lockBadge) lockBadge.style.display = 'none';
+
+    const title = document.getElementById('gen-banner-title');
+    if (title) {
+      title.textContent = `Timetable Generated: "${data.versionName || data.name || 'Master Timetable'}"`;
+    }
+
+    const phaseEl = document.getElementById('gen-banner-phase');
+    if (phaseEl) {
+      phaseEl.textContent = `Successfully computed ${data.entriesCount || 0} collision-free periods with zero hard conflicts in ${data.durationMs || 0}ms. Soft constraint score: ${data.score || 100}/100.`;
+    }
+
+    const bar = document.getElementById('gen-banner-progress-bar');
+    if (bar) {
+      bar.style.width = '100%';
+      bar.style.background = 'var(--color-success)';
+      bar.style.animation = 'none';
+    }
+
+    const pct = document.getElementById('gen-banner-percent');
+    if (pct) {
+      pct.textContent = '100%';
+      pct.style.color = 'var(--color-success)';
+    }
+
+    const stageLabel = document.getElementById('gen-banner-stage-label');
+    if (stageLabel) stageLabel.textContent = 'All constraints satisfied · Saved to database';
+
+    const dismissBtn = document.getElementById('gen-banner-dismiss-btn');
+    if (dismissBtn) {
+      dismissBtn.style.display = 'inline-block';
+      dismissBtn.onclick = () => { banner.style.display = 'none'; };
+    }
+
+    // Auto-dismiss after 10s if not dismissed manually
+    setTimeout(() => {
+      if (!isGenerationRunning && banner.style.display === 'block') {
+        banner.style.display = 'none';
+      }
+    }, 10000);
+  }
+
+  // Update in-modal box if open
+  const modalBox = document.getElementById('modal-gen-progress-box');
+  if (modalBox) {
+    const mBar = document.getElementById('modal-gen-progress-bar');
+    if (mBar) {
+      mBar.style.width = '100%';
+      mBar.style.background = 'var(--color-success)';
+    }
+    const mPct = document.getElementById('modal-gen-percent');
+    if (mPct) mPct.textContent = '100%';
+    const mPhase = document.getElementById('modal-gen-phase-text');
+    if (mPhase) mPhase.textContent = 'Generation Successful!';
+    updateStepBullets(100);
+
+    setTimeout(() => {
+      document.getElementById('modal-generate').style.display = 'none';
+      modalBox.style.display = 'none';
+    }, 1500);
+  }
+
+  // Reload studio and overview
+  loadStudio();
+  loadOverview();
+}
+
+function onGenerationFailed(data) {
+  isGenerationRunning = false;
+  stopGenerationTimer();
+  updateGenerationButtons(false);
+
+  const banner = document.getElementById('global-generation-banner');
+  if (banner) {
+    banner.style.display = 'block';
+    banner.style.borderColor = 'var(--color-error)';
+
+    const icon = document.getElementById('gen-banner-icon');
+    if (icon) {
+      icon.textContent = '❌';
+      icon.style.animation = 'none';
+    }
+
+    const badge = document.getElementById('gen-banner-badge');
+    if (badge) {
+      badge.textContent = 'Generation Infeasible';
+      badge.style.background = 'var(--color-error-bg)';
+      badge.style.color = 'var(--color-error)';
+    }
+
+    const lockBadge = document.getElementById('gen-banner-lock-badge');
+    if (lockBadge) lockBadge.style.display = 'none';
+
+    const title = document.getElementById('gen-banner-title');
+    if (title) title.textContent = 'CSP Generation Failed';
+
+    const phaseEl = document.getElementById('gen-banner-phase');
+    if (phaseEl) phaseEl.textContent = data.reason || 'The constraints could not be satisfied with current master data.';
+
+    const bar = document.getElementById('gen-banner-progress-bar');
+    if (bar) {
+      bar.style.width = '100%';
+      bar.style.background = 'var(--color-error)';
+      bar.style.animation = 'none';
+    }
+
+    const pct = document.getElementById('gen-banner-percent');
+    if (pct) {
+      pct.textContent = 'Error';
+      pct.style.color = 'var(--color-error)';
+    }
+
+    const dismissBtn = document.getElementById('gen-banner-dismiss-btn');
+    if (dismissBtn) {
+      dismissBtn.style.display = 'inline-block';
+      dismissBtn.onclick = () => { banner.style.display = 'none'; };
+    }
+  }
+
+  const modalBox = document.getElementById('modal-gen-progress-box');
+  if (modalBox) {
+    const mPhase = document.getElementById('modal-gen-phase-text');
+    if (mPhase) mPhase.textContent = 'Generation Infeasible';
+  }
+}
+
+async function checkGenerationStatus() {
+  try {
+    const state = await apiRequest('/api/timetable/generation-status');
+    if (state && state.isRunning) {
+      updateGenerationProgress(state);
+    }
+  } catch (err) {
+    // Non-blocking
+  }
+}
+
 function setupModals() {
   document.getElementById('modal-generate-close')?.addEventListener('click', () => {
     document.getElementById('modal-generate').style.display = 'none';
   });
 
+  document.getElementById('modal-generate-x')?.addEventListener('click', () => {
+    document.getElementById('modal-generate').style.display = 'none';
+  });
+
   document.getElementById('form-generate')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (isGenerationRunning) {
+      showToast('A timetable generation computation is already active in the background.', 'warning');
+      return;
+    }
+
     const name = document.getElementById('gen-name').value;
-    const btn = e.target.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    btn.textContent = 'Solving Constraints...';
+    const btn = document.getElementById('btn-submit-generate');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Initializing CSP Solver...';
+    }
+
+    // Immediately activate the in-modal and global progress trackers
+    updateGenerationProgress({
+      isRunning: true,
+      progress: 5,
+      phase: 'Phase 1: Validating Master Data Feasibility...',
+      name,
+      startedAt: Date.now()
+    });
 
     try {
       const res = await apiRequest('/api/timetable/generate', {
         method: 'POST',
-        body: { name }
+        body: { name },
+        showErrorToast: false
       });
+
+      if (res.alreadyRunning) {
+        showToast(res.reason || 'Generation already running in the background', 'warning');
+        if (res.state) updateGenerationProgress(res.state);
+        return;
+      }
+
       showToast(res.message, 'success');
-      document.getElementById('modal-generate').style.display = 'none';
+      onGenerationCompleted(res);
       switchTab('studio');
+    } catch (err) {
+      if (err.status === 409 || err.message?.includes('computation is currently active')) {
+        showToast('A timetable generation computation is already active in the background. Duplicate runs locked.', 'warning');
+        checkGenerationStatus();
+      } else {
+        onGenerationFailed({ reason: err.message || 'Generation failed' });
+        showToast(err.message || 'Failed to generate timetable', 'error');
+      }
     } finally {
-      btn.disabled = false;
-      btn.textContent = 'Start CSP Generator';
+      if (!isGenerationRunning && btn) {
+        btn.disabled = false;
+        btn.textContent = 'Start CSP Generator';
+      }
     }
   });
 
@@ -1299,12 +1689,18 @@ async function populateReasoningVersionSelector() {
   if (!sel) return;
 
   try {
-    const versions = await apiRequest('/api/timetable/versions');
+    const res = await apiRequest('/api/timetable/versions');
+    const versions = Array.isArray(res) ? res : (res?.versions || []);
+    if (!versions.length) {
+      sel.innerHTML = '<option value="">No timetable versions available</option>';
+      return;
+    }
     sel.innerHTML = versions.map(v => `
       <option value="${v.id}" ${v.status === 'active' ? 'selected' : ''}>${v.name} (${v.status.toUpperCase()})</option>
     `).join('');
   } catch (err) {
     console.error('Failed to load versions for reasoning:', err);
+    sel.innerHTML = '<option value="">Unable to load versions</option>';
   }
 }
 
@@ -1314,7 +1710,8 @@ async function populateDecisionAffectedSlots() {
 
   try {
     const todayStr = new Date().toISOString().slice(0, 10);
-    const absences = await apiRequest(`/api/absence/board?date=${todayStr}`);
+    const res = await apiRequest(`/api/absence/board?date=${todayStr}`);
+    const absences = Array.isArray(res) ? res : (res?.absences || []);
     const openSlots = [];
 
     absences.forEach(abs => {
@@ -1346,9 +1743,13 @@ async function populateDecisionTimetableEntries() {
   if (!sel) return;
 
   try {
-    const versions = await apiRequest('/api/timetable/versions');
+    const res = await apiRequest('/api/timetable/versions');
+    const versions = Array.isArray(res) ? res : (res?.versions || []);
     const active = versions.find(v => v.status === 'active') || versions[0];
-    if (!active) return;
+    if (!active) {
+      sel.innerHTML = `<option value="">No timetable versions found</option>`;
+      return;
+    }
 
     const data = await apiRequest(`/api/timetable/versions/${active.id}`);
     sel.innerHTML = (data.entries || []).slice(0, 30).map(e => `

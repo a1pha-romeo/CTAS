@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Portal · CTAS</title>
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/animations.css">
+  <link rel="stylesheet" href="/css/pages.css">
+</head>
+<body>
+  <!-- Top Bar Contract -->
+  <header class="top-nav">
+    <a href="/student/" class="brand-mark">
+      <div class="brand-logo-badge">CT</div>
+      <span>CTAS · STUDENT PORTAL</span>
+    </a>
+
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <button class="btn-primary" data-student-tab="my-section">My Section Schedule</button>
+      <button class="btn-secondary" data-student-tab="department">Full Department Timetable</button>
+    </div>
+
+    <div class="top-actions">
+      <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; margin-right: 0.5rem;">
+        <span id="user-display-name" style="font-weight: 600;">Student</span>
+        <span id="user-role-badge" style="font-size: 0.75rem; color: var(--color-brand-primary); font-weight: 700;">STUDENT</span>
+      </div>
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Theme" aria-label="Toggle Theme">
+        <span id="theme-icon">🌙</span>
+      </button>
+      <button id="logout-btn" class="btn-secondary" style="font-size: 0.85rem; padding: 0.4rem 0.85rem;">
+        Log Out
+      </button>
+    </div>
+  </header>
+
+  <main style="max-width: 1300px; margin: 1.75rem auto; padding: 0 1.5rem; width: 100%;">
+    <!-- Section Banner -->
+    <div class="card animate-fade-in" style="margin-bottom: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <h2 style="font-size: 2.25rem; color: var(--color-brand-primary); margin-bottom: 0.25rem;" id="section-title-header">
+            Class Schedule &amp; Timetable
+          </h2>
+          <div style="font-size: 0.95rem; color: var(--text-secondary);" id="section-dept-line">
+            Loading section information...
+          </div>
+        </div>
+
+        <div style="background: var(--bg-surface-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 0.6rem 1.25rem; text-align: center;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Timetable Status</div>
+          <div style="font-size: 1.05rem; font-weight: 700; color: var(--color-success);">Active &amp; Verified</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. VIEW PANEL: MY SECTION SCHEDULE -->
+    <div id="panel-my-section" class="student-view-panel animate-fade-in">
+      <div style="display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 1.5rem;">
+        <!-- Today's Schedule Breakdown -->
+        <div class="card">
+          <!-- Date Navigator Controls -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+            <div>
+              <h3 style="font-size: 1.5rem; color: var(--color-brand-primary);" id="selected-date-heading">
+                Today's Classes
+              </h3>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Real-time substitute coverage &amp; attendance status</div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button class="btn-secondary" id="btn-date-prev" style="padding: 0.35rem 0.65rem;">&larr;</button>
+              <button class="btn-secondary" id="btn-date-today" style="padding: 0.35rem 0.75rem;">Today</button>
+              <button class="btn-secondary" id="btn-date-next" style="padding: 0.35rem 0.65rem;">&rarr;</button>
+              <input type="date" id="student-date-picker" style="font-size: 0.85rem; padding: 0.35rem 0.6rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-surface);">
+            </div>
+          </div>
+
+          <!-- Color Status Legend -->
+          <div style="display: flex; gap: 1rem; font-size: 0.8rem; margin-bottom: 1.25rem; padding: 0.65rem 0.85rem; background: var(--bg-surface-subtle); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); flex-wrap: wrap;">
+            <span style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="width: 10px; height: 10px; border-radius: 2px; background: var(--color-success);"></span>
+              <strong>Green:</strong> Regular Faculty Present
+            </span>
+            <span style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="width: 10px; height: 10px; border-radius: 2px; background: var(--color-warning);"></span>
+              <strong>Amber:</strong> Colleague Substitute Active
+            </span>
+            <span style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="width: 10px; height: 10px; border-radius: 2px; background: var(--color-error);"></span>
+              <strong>Red:</strong> Period Suspended / Self-Study
+            </span>
+          </div>
+
+          <div id="today-classes-container" style="display: flex; flex-direction: column; gap: 0.6rem;">
+            <div style="color: var(--text-muted); font-size: 0.85rem;">Loading today's classes...</div>
+          </div>
+        </div>
+
+        <!-- Sidebar: Next Class Tracker & Weekly Schedule -->
+        <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+          <!-- Next Class Tracker -->
+          <div class="card" id="next-class-tracker-box" style="background: linear-gradient(135deg, var(--color-brand-blush-soft) 0%, var(--bg-surface) 100%);">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Loading next period...</div>
+          </div>
+
+          <!-- Weekly Overview -->
+          <div class="card">
+            <h3 style="font-size: 1.3rem; color: var(--color-brand-primary); margin-bottom: 0.75rem;">
+              Full Weekly Timetable
+            </h3>
+            <div id="student-schedule-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 480px; overflow-y: auto;">
+              <div style="color: var(--text-muted); font-size: 0.85rem;">Loading weekly breakdown...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. VIEW PANEL: DEPARTMENT TIMETABLE (Read-only) -->
+    <div id="panel-department" class="student-view-panel animate-fade-in" style="display: none;">
+      <div class="card">
+        <h3 style="font-size: 1.6rem; color: var(--color-brand-primary); margin-bottom: 0.25rem;">
+          Department Overview Timetable
+        </h3>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+          Read-only master view of all student sections within your department.
+        </p>
+        <div id="department-timetable-container"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="main-footer">
+    <p>Class Timetable Automation System (CTAS) · Student Portal</p>
+  </footer>
+
+  <script type="module" src="/js/theme.js"></script>
+  <script type="module" src="/js/toast.js"></script>
+  <script type="module" src="/student/student.js"></script>
+</body>
+</html>

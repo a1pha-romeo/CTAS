@@ -1,0 +1,7 @@
+{
+  "name": "Class Timetable Automation System (CTAS)",
+  "description": "Conflict-free timetable generation, real-time faculty availability, absence substitution, and Grok AI assistance for college scheduling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

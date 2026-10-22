@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Class Timetable Automation System (CTAS)</title>
+  <meta name="description" content="Conflict-free timetable generation, real-time faculty availability, absence substitution, and Grok AI assistance for college scheduling.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/animations.css">
+  <link rel="stylesheet" href="/css/pages.css">
+</head>
+<body>
+  <!-- Top Navigation (3-zone contract) -->
+  <header class="top-nav">
+    <a href="/" class="brand-mark">
+      <div class="brand-logo-badge">CT</div>
+      <span>CTAS · COLLEGE TIMETABLE SYSTEM</span>
+    </a>
+
+    <nav class="nav-links">
+      <a href="#features">Capabilities</a>
+      <a href="#solver">CSP Engine</a>
+      <a href="#substitution">Live Substitutions</a>
+      <a href="#grok">Grok AI</a>
+    </nav>
+
+    <div class="top-actions">
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Theme" aria-label="Toggle Theme">
+        <span id="theme-icon">🌙</span>
+      </button>
+      <a href="#login" class="btn-primary">Access Portal</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main>
+    <section class="hero-section">
+      <div class="hero-container">
+        <div class="hero-grid">
+          <!-- Left Column: Headline and Overview -->
+          <div class="hero-content animate-slide-up">
+            <h1 class="hero-title">Automated, Conflict-Free Timetable Intelligence</h1>
+            <p class="hero-subtitle">
+              CTAS automates academic timetable generation using deterministic constraint satisfaction, provides real-time faculty substitution when teachers are absent or late, and offers Grok AI assistance for timetable image digitisation and clash analysis.
+            </p>
+
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 2rem;">
+              <a href="#login" class="btn-primary" style="padding: 0.75rem 1.6rem; font-size: 1rem;">
+                Select Role &amp; Enter
+              </a>
+              <a href="#features" class="btn-secondary" style="padding: 0.75rem 1.4rem;">
+                Explore Features
+              </a>
+            </div>
+
+            <!-- Unboxed metadata (Zero-Pill discipline) -->
+            <div class="hero-badge-row">
+              <span>Deterministic CSP Solver</span>
+              <span aria-hidden="true">·</span>
+              <span>Sub-Second Absence Matching</span>
+              <span aria-hidden="true">·</span>
+              <span>Grok AI Vision &amp; Reasoning</span>
+            </div>
+          </div>
+
+          <!-- Right Column: Interactive Role Selection & Login -->
+          <div class="hero-portal-panel animate-slide-up stagger-1" id="login">
+            <div class="login-box">
+              <div class="login-header">
+                <h2 class="login-title" id="selected-role-title">Admin Portal Login</h2>
+                <p class="login-subtitle">Choose your access profile below to authenticate</p>
+              </div>
+
+              <!-- Role Selector Cards -->
+              <div class="role-card-grid">
+                <div class="role-card active" data-role="admin">
+                  <div class="role-card-icon">⚡</div>
+                  <div class="role-card-title">Admin</div>
+                  <div class="role-card-desc">Master data, generator &amp; studio</div>
+                </div>
+
+                <div class="role-card" data-role="faculty">
+                  <div class="role-card-icon">👨‍🏫</div>
+                  <div class="role-card-title">Faculty</div>
+                  <div class="role-card-desc">Calendar, absence &amp; cover board</div>
+                </div>
+
+                <div class="role-card" data-role="student">
+                  <div class="role-card-icon">🎓</div>
+                  <div class="role-card-title">Student</div>
+                  <div class="role-card-desc">Section schedules &amp; live notices</div>
+                </div>
+              </div>
+
+              <!-- Login Form -->
+              <form id="login-form">
+                <div class="form-group">
+                  <label class="form-label" for="username">Username or ID</label>
+                  <input type="text" id="username" class="form-input" placeholder="e.g. admin" required autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="password">Password</label>
+                  <input type="password" id="password" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn-primary" style="width: 100%; padding: 0.75rem;">
+                    Sign In to Portal
+                  </button>
+                </div>
+              </form>
+
+              <!-- Quick Demo Fill Helpers -->
+              <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle); font-size: 0.8rem; color: var(--text-muted);">
+                <div style="margin-bottom: 0.4rem; font-weight: 600;">Phase 1 Demo Access:</div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;" data-demo-creds="admin:Admin@123:admin">
+                    Fill Admin
+                  </button>
+                  <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;" data-demo-creds="faculty1:Faculty@123:faculty">
+                    Fill Faculty
+                  </button>
+                  <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;" data-demo-creds="student1:Student@123:student">
+                    Fill Student
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- System Status Strip -->
+    <div class="status-strip">
+      <div class="status-container">
+        <div class="status-item">
+          <div class="status-dot"></div>
+          <span><strong>Engine Status:</strong> Online &amp; Ready (Phase 1 Initialized)</span>
+        </div>
+        <div class="status-item">
+          <span><strong>Storage:</strong> SQLite PRAGMA WAL &amp; Foreign Keys</span>
+        </div>
+        <div class="status-item">
+          <span><strong>AI Integration:</strong> Grok Vision, Reasoning &amp; Decision</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features Section -->
+    <section class="features-section" id="features">
+      <div class="section-header">
+        <h2 class="section-title">Engineered for Academic Perfection</h2>
+        <p class="section-subtitle">A synchronized multi-role platform that resolves scheduling complexity before term begins and manages day-to-day faculty disruptions seamlessly.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-num">01</div>
+          <h3>Deterministic Constraint Solver</h3>
+          <p>Backtracking forward-checking algorithm with zero-conflict database uniqueness guarantees for faculty, rooms, and sections.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-num">02</div>
+          <h3>Live Absence &amp; Availability Board</h3>
+          <p>Instant detection of faculty absence or delay with intelligent colleague matching by qualification, load balance, and contact affordances.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-num">03</div>
+          <h3>Grok AI Vision &amp; Clash Reasoning</h3>
+          <p>Screenshot timetable digitisation, plain-English clash diagnosis, and ranked decision recommendations with deterministic validator fallbacks.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Clean Footer -->
+  <footer class="main-footer">
+    <p>Class Timetable Automation System (CTAS) · Academic Year 2026</p>
+  </footer>
+
+  <script type="module" src="/js/theme.js"></script>
+  <script type="module" src="/js/toast.js"></script>
+  <script type="module" src="/js/api.js"></script>
+  <script type="module" src="/js/auth.js"></script>
+  <script type="module" src="/js/landing.js"></script>
+</body>
+</html>

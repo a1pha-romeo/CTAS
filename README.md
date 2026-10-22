@@ -125,17 +125,59 @@ npm start
 ```
 The server will start at `http://localhost:3000`.
 
+### 5. Running the Complete Test Suite
+```bash
+npm test
+```
+Executes all 63 automated tests covering:
+- Database constraints and collision prevention
+- RBAC authentication and role route guards
+- CSP scheduling engine (backtracking and forward-checking)
+- Conflict validator (11 violation codes)
+- Admin studio drag-and-drop operations
+- Faculty calendar and availability logic
+- Absence reporting and substitution flow
+- Grok AI services (Vision OCR, Clash Reasoner, Decision Support)
+
 ---
 
 ## Default Credentials (Sample Data)
 
 | Role | Username | Password | Access Rights |
 | :--- | :--- | :--- | :--- |
-| **Admin** | `admin` | `Admin@123` | Full control: master data, timetable generation, studio, audit |
-| **Faculty** | `faculty1` | `Faculty@123` | Teaching calendar, absence reporting, availability board |
-| **Student** | `student1` | `Student@123` | Read-only section schedule, current period tracker |
+| **Admin** | `admin` | `Admin@123` | Full control: master data, timetable generation, studio, audit, AI center |
+| **Faculty** | `faculty1` to `faculty10` | `Faculty@123` | Teaching calendar, absence reporting, availability board, substitution claims |
+| **Student** | `student1` to `student4` | `Student@123` | Read-only section schedule, current period tracker, department timetable |
 
-*(Seed script activated in Phase 2)*
+*Note: Please change default passwords after first deployment.*
+
+---
+
+## Grok AI Intelligence Center (Phases 10, 11, 12)
+
+CTAS is equipped with a specialized three-tier Grok AI integration:
+
+1. **Grok Vision (Phase 10)**:
+   - Digitizes uploaded timetable images/screenshots (PNG/JPG/WEBP up to 8 MB) into structured period blocks.
+   - Automatically fuzzy-matches courses, faculty members, and rooms to active institutional master data.
+   - Provides an interactive review screen with confidence metrics, live conflict checking, and one-click draft creation.
+   - Includes a deterministic sample capture generator for immediate demonstration even without an active API key.
+
+2. **Grok Reasoning (Phase 11)**:
+   - Takes deterministic validator conflict violations and diagnoses why each clash matters pedagogically and operationally.
+   - Provides 2 to 3 actionable fix proposals with expected side effects and tradeoffs.
+   - Persists issues to `ai_issue_log` and integrates directly with the Timetable Studio.
+
+3. **Grok Decision Support (Phase 12)**:
+   - Multi-objective candidate ranking for faculty substitutions when teachers are absent or delayed.
+   - Weights subject qualifications, department affinity, and weekly workload balancing to prevent educator burnout.
+   - Calculates collision-free reschedule windows for uncovered lectures/labs with one-click administrative approval.
+
+---
+
+## Instant Presentation Demo Mode
+
+Click the **🚀 Launch Instant Presentation Demo Mode** button on the landing page login panel to instantly authenticate with administrative privileges and load verified college schedules in seconds.
 
 ---
 
@@ -149,22 +191,5 @@ To test the multi-device real-time updates (e.g. mobile student view vs admin de
 ## Database Management & Backup
 - **Location**: `data/timetable.db`
 - **Backup**: Simply copy `data/timetable.db` to a safe location while the server is running (SQLite WAL mode allows safe online reads).
-- **Reset**: Run `npm run reset-db` to delete the database and start fresh.
+- **Reset**: Run `npm run reset-db` or `npm run seed` to regenerate clean master data.
 
----
-
-## Verification Commands for Phase 1
-
-1. Start the server:
-   ```bash
-   npm start
-   ```
-2. Verify HTTP endpoint:
-   ```bash
-   curl http://localhost:3000/api/health
-   ```
-   Expected response:
-   ```json
-   {"status":"ok","app":"Class Timetable Automation System (CTAS)","version":"1.0.0","phase":1,"database":"connected (SQLite PRAGMA foreign_keys=ON, journal_mode=WAL)"}
-   ```
-3. Open `http://localhost:3000/` in your browser to view the interactive landing page with role selector and light/dark theme toggle.

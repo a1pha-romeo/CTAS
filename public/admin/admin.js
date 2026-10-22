@@ -55,6 +55,7 @@ function setupNavigation() {
   });
 
   document.getElementById('logout-btn')?.addEventListener('click', logout);
+  setupMasterDataSubtabs();
 }
 
 export function switchTab(tab) {
@@ -79,6 +80,7 @@ export function switchTab(tab) {
   if (tab === 'availability') loadAvailabilityEditor();
   if (tab === 'assignments') loadAssignments();
   if (tab === 'absence') loadAbsenceMonitor();
+  if (tab === 'ai-center') loadAiCenter();
 }
 
 // 1. Overview Loader
@@ -125,15 +127,52 @@ async function loadMasterData() {
   }
 }
 
+let activeMasterSubtab = 'faculty';
+
+function setupMasterDataSubtabs() {
+  document.querySelectorAll('.master-subtab-btn').forEach(btn => {
+    btn.onclick = () => {
+      activeMasterSubtab = btn.getAttribute('data-master-subtab');
+      document.querySelectorAll('.master-subtab-btn').forEach(b => {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-secondary');
+      });
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-secondary');
+
+      document.querySelectorAll('.master-subpanel').forEach(p => p.style.display = 'none');
+      const panel = document.getElementById(`master-subpanel-${activeMasterSubtab}`);
+      if (panel) panel.style.display = 'block';
+    };
+  });
+}
+
 function renderMasterDataTables() {
   if (!masterData) return;
+
+  // Counts
+  const facCount = document.getElementById('count-faculty');
+  if (facCount) facCount.textContent = masterData.faculty?.length || 0;
+  const subCount = document.getElementById('count-subjects');
+  if (subCount) subCount.textContent = masterData.subjects?.length || 0;
+  const roomCount = document.getElementById('count-rooms');
+  if (roomCount) roomCount.textContent = masterData.rooms?.length || 0;
+  const secCount = document.getElementById('count-sections');
+  if (secCount) secCount.textContent = masterData.sections?.length || 0;
+  const holCount = document.getElementById('count-holidays');
+  if (holCount) holCount.textContent = masterData.holidays?.length || 0;
+  const deptCount = document.getElementById('count-departments');
+  if (deptCount) deptCount.textContent = masterData.departments?.length || 0;
+
+  // 1. Faculty
   const facTable = document.getElementById('table-faculty-body');
   if (facTable) {
     facTable.innerHTML = masterData.faculty.map(f => `
       <tr style="border-bottom: 1px solid var(--border-subtle);">
         <td style="padding: 0.6rem 0.75rem; font-weight: 600;">${f.name}</td>
-        <td style="padding: 0.6rem 0.75rem;">${f.department_name}</td>
-        <td style="padding: 0.6rem 0.75rem;">${f.email}</td>
+        <td style="padding: 0.6rem 0.75rem;"><span style="background: var(--bg-surface-subtle); padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 600;">${f.department_code}</span> ${f.department_name}</td>
+        <td style="padding: 0.6rem 0.75rem;">${f.email || '—'}</td>
+        <td style="padding: 0.6rem 0.75rem;">${f.phone || '—'}</td>
         <td style="padding: 0.6rem 0.75rem;" class="tabular-nums">${f.max_periods_per_day} / day · ${f.max_periods_per_week} / wk</td>
         <td style="padding: 0.6rem 0.75rem; text-align: right;">
           <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="window.editFaculty(${f.id})">Edit</button>
@@ -143,30 +182,83 @@ function renderMasterDataTables() {
     `).join('');
   }
 
+  // 2. Subjects
   const subTable = document.getElementById('table-subjects-body');
   if (subTable) {
     subTable.innerHTML = masterData.subjects.map(s => `
       <tr style="border-bottom: 1px solid var(--border-subtle);">
         <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--color-brand-primary);">${s.code}</td>
-        <td style="padding: 0.6rem 0.75rem;">${s.name}</td>
-        <td style="padding: 0.6rem 0.75rem;"><span style="text-transform: capitalize;">${s.type}</span> ${s.type === 'lab' ? `(${s.lab_block_length}p block)` : ''}</td>
+        <td style="padding: 0.6rem 0.75rem; font-weight: 600;">${s.name}</td>
+        <td style="padding: 0.6rem 0.75rem;">${s.department_code}</td>
+        <td style="padding: 0.6rem 0.75rem;">Sem ${s.semester}</td>
+        <td style="padding: 0.6rem 0.75rem;"><span style="text-transform: capitalize; background: var(--bg-surface-subtle); padding: 0.15rem 0.45rem; border-radius: 4px;">${s.type}</span> ${s.type === 'lab' ? `(${s.lab_block_length}p block)` : ''}</td>
         <td style="padding: 0.6rem 0.75rem;" class="tabular-nums">${s.weekly_periods} periods</td>
         <td style="padding: 0.6rem 0.75rem; text-align: right;">
+          <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="window.editSubject(${s.id})">Edit</button>
           <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; color: var(--color-error);" onclick="window.deleteSubject(${s.id})">Delete</button>
         </td>
       </tr>
     `).join('');
   }
 
+  // 3. Rooms
   const roomTable = document.getElementById('table-rooms-body');
   if (roomTable) {
     roomTable.innerHTML = masterData.rooms.map(r => `
       <tr style="border-bottom: 1px solid var(--border-subtle);">
         <td style="padding: 0.6rem 0.75rem; font-weight: 600;">${r.name}</td>
-        <td style="padding: 0.6rem 0.75rem;"><span style="text-transform: capitalize;">${r.type}</span></td>
+        <td style="padding: 0.6rem 0.75rem;"><span style="text-transform: capitalize; background: var(--bg-surface-subtle); padding: 0.15rem 0.45rem; border-radius: 4px;">${r.type}</span></td>
         <td style="padding: 0.6rem 0.75rem;" class="tabular-nums">${r.capacity} seats</td>
+        <td style="padding: 0.6rem 0.75rem;"><span style="color: var(--color-success); font-weight: 600;">● Active</span></td>
         <td style="padding: 0.6rem 0.75rem; text-align: right;">
+          <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="window.editRoom(${r.id})">Edit</button>
           <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; color: var(--color-error);" onclick="window.deleteRoom(${r.id})">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // 4. Sections
+  const secTable = document.getElementById('table-sections-body');
+  if (secTable) {
+    secTable.innerHTML = (masterData.sections || []).map(sec => `
+      <tr style="border-bottom: 1px solid var(--border-subtle);">
+        <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--color-brand-primary);">${sec.name}</td>
+        <td style="padding: 0.6rem 0.75rem;">${sec.department_name} (${sec.department_code})</td>
+        <td style="padding: 0.6rem 0.75rem;">Semester ${sec.semester}</td>
+        <td style="padding: 0.6rem 0.75rem;" class="tabular-nums">${sec.strength} students</td>
+        <td style="padding: 0.6rem 0.75rem; text-align: right;">
+          <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="window.editSection(${sec.id})">Edit</button>
+          <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; color: var(--color-error);" onclick="window.deleteSection(${sec.id})">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // 5. Holidays
+  const holTable = document.getElementById('table-holidays-body');
+  if (holTable) {
+    holTable.innerHTML = (masterData.holidays || []).map(h => `
+      <tr style="border-bottom: 1px solid var(--border-subtle);">
+        <td style="padding: 0.6rem 0.75rem; font-weight: 600; color: var(--color-brand-primary);">${h.date}</td>
+        <td style="padding: 0.6rem 0.75rem;">${h.description}</td>
+        <td style="padding: 0.6rem 0.75rem; text-align: right;">
+          <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; color: var(--color-error);" onclick="window.deleteHoliday(${h.id})">Remove</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // 6. Departments
+  const deptTable = document.getElementById('table-departments-body');
+  if (deptTable) {
+    deptTable.innerHTML = (masterData.departments || []).map(d => `
+      <tr style="border-bottom: 1px solid var(--border-subtle);">
+        <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--color-brand-primary);">${d.code}</td>
+        <td style="padding: 0.6rem 0.75rem; font-weight: 600;">${d.name}</td>
+        <td style="padding: 0.6rem 0.75rem; text-align: right;">
+          <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="window.editDepartment(${d.id})">Edit</button>
+          <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; color: var(--color-error);" onclick="window.deleteDepartment(${d.id})">Delete</button>
         </td>
       </tr>
     `).join('');
@@ -519,6 +611,140 @@ function setupModals() {
       btn.textContent = 'Start CSP Generator';
     }
   });
+
+  // Master Data forms
+  document.getElementById('form-faculty')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('fac-id').value;
+    const body = {
+      name: document.getElementById('fac-name').value,
+      departmentId: parseInt(document.getElementById('fac-dept').value, 10),
+      email: document.getElementById('fac-email').value,
+      phone: document.getElementById('fac-phone').value,
+      maxPeriodsPerDay: parseInt(document.getElementById('fac-max-day').value, 10),
+      maxPeriodsPerWeek: parseInt(document.getElementById('fac-max-week').value, 10)
+    };
+    try {
+      if (id) {
+        await apiRequest(`/api/admin/faculty/${id}`, { method: 'PUT', body });
+        showToast('Faculty updated successfully', 'success');
+      } else {
+        await apiRequest('/api/admin/faculty', { method: 'POST', body });
+        showToast('Faculty added successfully', 'success');
+      }
+      document.getElementById('modal-faculty').style.display = 'none';
+      await loadMasterData();
+      renderMasterDataTables();
+    } catch (err) {}
+  });
+
+  document.getElementById('form-subject')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('sub-id').value;
+    const body = {
+      code: document.getElementById('sub-code').value,
+      name: document.getElementById('sub-name').value,
+      departmentId: parseInt(document.getElementById('sub-dept').value, 10),
+      semester: parseInt(document.getElementById('sub-semester').value, 10),
+      type: document.getElementById('sub-type').value,
+      weeklyPeriods: parseInt(document.getElementById('sub-periods').value, 10),
+      labBlockLength: parseInt(document.getElementById('sub-lab-block').value, 10)
+    };
+    try {
+      if (id) {
+        await apiRequest(`/api/admin/subjects/${id}`, { method: 'PUT', body });
+        showToast('Subject updated successfully', 'success');
+      } else {
+        await apiRequest('/api/admin/subjects', { method: 'POST', body });
+        showToast('Subject created successfully', 'success');
+      }
+      document.getElementById('modal-subject').style.display = 'none';
+      await loadMasterData();
+      renderMasterDataTables();
+    } catch (err) {}
+  });
+
+  document.getElementById('form-room')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('room-id').value;
+    const body = {
+      name: document.getElementById('room-name').value,
+      type: document.getElementById('room-type').value,
+      capacity: parseInt(document.getElementById('room-capacity').value, 10),
+      isActive: 1
+    };
+    try {
+      if (id) {
+        await apiRequest(`/api/admin/rooms/${id}`, { method: 'PUT', body });
+        showToast('Room updated successfully', 'success');
+      } else {
+        await apiRequest('/api/admin/rooms', { method: 'POST', body });
+        showToast('Room created successfully', 'success');
+      }
+      document.getElementById('modal-room').style.display = 'none';
+      await loadMasterData();
+      renderMasterDataTables();
+    } catch (err) {}
+  });
+
+  document.getElementById('form-section')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('sec-id').value;
+    const body = {
+      name: document.getElementById('sec-name').value,
+      departmentId: parseInt(document.getElementById('sec-dept').value, 10),
+      semester: parseInt(document.getElementById('sec-semester').value, 10),
+      strength: parseInt(document.getElementById('sec-strength').value, 10)
+    };
+    try {
+      if (id) {
+        await apiRequest(`/api/admin/sections/${id}`, { method: 'PUT', body });
+        showToast('Section updated successfully', 'success');
+      } else {
+        await apiRequest('/api/admin/sections', { method: 'POST', body });
+        showToast('Section created successfully', 'success');
+      }
+      document.getElementById('modal-section').style.display = 'none';
+      await loadMasterData();
+      renderMasterDataTables();
+    } catch (err) {}
+  });
+
+  document.getElementById('form-holiday')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      date: document.getElementById('hol-date').value,
+      description: document.getElementById('hol-desc').value
+    };
+    try {
+      await apiRequest('/api/admin/holidays', { method: 'POST', body });
+      showToast('Academic holiday added successfully', 'success');
+      document.getElementById('modal-holiday').style.display = 'none';
+      await loadMasterData();
+      renderMasterDataTables();
+    } catch (err) {}
+  });
+
+  document.getElementById('form-department')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('dept-id').value;
+    const body = {
+      code: document.getElementById('dept-code').value,
+      name: document.getElementById('dept-name').value
+    };
+    try {
+      if (id) {
+        await apiRequest(`/api/admin/departments/${id}`, { method: 'PUT', body });
+        showToast('Department updated successfully', 'success');
+      } else {
+        await apiRequest('/api/admin/departments', { method: 'POST', body });
+        showToast('Department created successfully', 'success');
+      }
+      document.getElementById('modal-department').style.display = 'none';
+      await loadMasterData();
+      renderMasterDataTables();
+    } catch (err) {}
+  });
 }
 
 function openEditEntryModal(entryId) {
@@ -807,7 +1033,34 @@ window.assignSubstitute = async (timetableEntryId, date, substituteFacultyId, fa
   }
 };
 
-// Global functions for inline actions
+// Global functions for inline actions & Master Data Modals
+window.openFacultyModal = (id = null) => {
+  const deptSelect = document.getElementById('fac-dept');
+  if (deptSelect && masterData) {
+    deptSelect.innerHTML = (masterData.departments || []).map(d => `<option value="${d.id}">${d.name} (${d.code})</option>`).join('');
+  }
+  const title = document.getElementById('modal-faculty-title');
+  if (id) {
+    const f = masterData.faculty.find(x => x.id === id);
+    if (!f) return;
+    document.getElementById('fac-id').value = f.id;
+    document.getElementById('fac-name').value = f.name;
+    document.getElementById('fac-dept').value = f.department_id;
+    document.getElementById('fac-email').value = f.email || '';
+    document.getElementById('fac-phone').value = f.phone || '';
+    document.getElementById('fac-max-day').value = f.max_periods_per_day;
+    document.getElementById('fac-max-week').value = f.max_periods_per_week;
+    if (title) title.textContent = 'Edit Faculty Member';
+  } else {
+    document.getElementById('form-faculty')?.reset();
+    document.getElementById('fac-id').value = '';
+    if (title) title.textContent = 'Add Faculty Member';
+  }
+  document.getElementById('modal-faculty').style.display = 'flex';
+};
+
+window.editFaculty = (id) => window.openFacultyModal(id);
+
 window.deleteFaculty = async (id) => {
   if (!confirm('Are you sure you want to delete this faculty member?')) return;
   try {
@@ -817,6 +1070,34 @@ window.deleteFaculty = async (id) => {
     renderMasterDataTables();
   } catch (err) {}
 };
+
+window.openSubjectModal = (id = null) => {
+  const deptSelect = document.getElementById('sub-dept');
+  if (deptSelect && masterData) {
+    deptSelect.innerHTML = (masterData.departments || []).map(d => `<option value="${d.id}">${d.name} (${d.code})</option>`).join('');
+  }
+  const title = document.getElementById('modal-subject-title');
+  if (id) {
+    const s = masterData.subjects.find(x => x.id === id);
+    if (!s) return;
+    document.getElementById('sub-id').value = s.id;
+    document.getElementById('sub-code').value = s.code;
+    document.getElementById('sub-name').value = s.name;
+    document.getElementById('sub-dept').value = s.department_id;
+    document.getElementById('sub-semester').value = s.semester;
+    document.getElementById('sub-type').value = s.type;
+    document.getElementById('sub-periods').value = s.weekly_periods;
+    document.getElementById('sub-lab-block').value = s.lab_block_length;
+    if (title) title.textContent = 'Edit Subject';
+  } else {
+    document.getElementById('form-subject')?.reset();
+    document.getElementById('sub-id').value = '';
+    if (title) title.textContent = 'Add Subject';
+  }
+  document.getElementById('modal-subject').style.display = 'flex';
+};
+
+window.editSubject = (id) => window.openSubjectModal(id);
 
 window.deleteSubject = async (id) => {
   if (!confirm('Are you sure you want to delete this subject?')) return;
@@ -828,6 +1109,26 @@ window.deleteSubject = async (id) => {
   } catch (err) {}
 };
 
+window.openRoomModal = (id = null) => {
+  const title = document.getElementById('modal-room-title');
+  if (id) {
+    const r = masterData.rooms.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('room-id').value = r.id;
+    document.getElementById('room-name').value = r.name;
+    document.getElementById('room-type').value = r.type;
+    document.getElementById('room-capacity').value = r.capacity;
+    if (title) title.textContent = 'Edit Room / Lab';
+  } else {
+    document.getElementById('form-room')?.reset();
+    document.getElementById('room-id').value = '';
+    if (title) title.textContent = 'Add Room / Lab';
+  }
+  document.getElementById('modal-room').style.display = 'flex';
+};
+
+window.editRoom = (id) => window.openRoomModal(id);
+
 window.deleteRoom = async (id) => {
   if (!confirm('Are you sure you want to delete this room?')) return;
   try {
@@ -838,4 +1139,670 @@ window.deleteRoom = async (id) => {
   } catch (err) {}
 };
 
+window.openSectionModal = (id = null) => {
+  const deptSelect = document.getElementById('sec-dept');
+  if (deptSelect && masterData) {
+    deptSelect.innerHTML = (masterData.departments || []).map(d => `<option value="${d.id}">${d.name} (${d.code})</option>`).join('');
+  }
+  const title = document.getElementById('modal-section-title');
+  if (id) {
+    const sec = masterData.sections.find(x => x.id === id);
+    if (!sec) return;
+    document.getElementById('sec-id').value = sec.id;
+    document.getElementById('sec-name').value = sec.name;
+    document.getElementById('sec-dept').value = sec.department_id;
+    document.getElementById('sec-semester').value = sec.semester;
+    document.getElementById('sec-strength').value = sec.strength;
+    if (title) title.textContent = 'Edit Student Section';
+  } else {
+    document.getElementById('form-section')?.reset();
+    document.getElementById('sec-id').value = '';
+    if (title) title.textContent = 'Add Student Section';
+  }
+  document.getElementById('modal-section').style.display = 'flex';
+};
+
+window.editSection = (id) => window.openSectionModal(id);
+
+window.deleteSection = async (id) => {
+  if (!confirm('Are you sure you want to delete this section?')) return;
+  try {
+    await apiRequest(`/api/admin/sections/${id}`, { method: 'DELETE' });
+    showToast('Section deleted', 'info');
+    await loadMasterData();
+    renderMasterDataTables();
+  } catch (err) {}
+};
+
+window.openHolidayModal = () => {
+  document.getElementById('form-holiday')?.reset();
+  const dateInput = document.getElementById('hol-date');
+  if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-holiday').style.display = 'flex';
+};
+
+window.deleteHoliday = async (id) => {
+  if (!confirm('Are you sure you want to remove this academic holiday?')) return;
+  try {
+    await apiRequest(`/api/admin/holidays/${id}`, { method: 'DELETE' });
+    showToast('Holiday removed', 'info');
+    await loadMasterData();
+    renderMasterDataTables();
+  } catch (err) {}
+};
+
+window.openDepartmentModal = (id = null) => {
+  const title = document.getElementById('modal-dept-title');
+  if (id) {
+    const d = masterData.departments.find(x => x.id === id);
+    if (!d) return;
+    document.getElementById('dept-id').value = d.id;
+    document.getElementById('dept-code').value = d.code;
+    document.getElementById('dept-name').value = d.name;
+    if (title) title.textContent = 'Edit Department';
+  } else {
+    document.getElementById('form-department')?.reset();
+    document.getElementById('dept-id').value = '';
+    if (title) title.textContent = 'Add Department';
+  }
+  document.getElementById('modal-department').style.display = 'flex';
+};
+
+window.editDepartment = (id) => window.openDepartmentModal(id);
+
+window.deleteDepartment = async (id) => {
+  if (!confirm('Are you sure you want to delete this department?')) return;
+  try {
+    await apiRequest(`/api/admin/departments/${id}`, { method: 'DELETE' });
+    showToast('Department deleted', 'info');
+    await loadMasterData();
+    renderMasterDataTables();
+  } catch (err) {}
+};
+
+// ============================================================================
+// 6. AI INTELLIGENCE CENTER (Phases 10, 11, 12)
+// ============================================================================
+let aiCenterInitialized = false;
+let currentExtractedReviewData = null;
+let selectedVisionFile = null;
+
+async function loadAiCenter() {
+  if (!masterData) await loadMasterData();
+  await loadAiStatusPills();
+  setupAiSubtabs();
+
+  // Populate selectors
+  populateVisionSectionSelector();
+  await populateReasoningVersionSelector();
+  await populateDecisionAffectedSlots();
+  await populateDecisionTimetableEntries();
+
+  if (!aiCenterInitialized) {
+    setupAiCenterEvents();
+    aiCenterInitialized = true;
+  }
+}
+
+async function loadAiStatusPills() {
+  const container = document.getElementById('ai-model-status-pills');
+  if (!container) return;
+
+  try {
+    const res = await apiRequest('/api/ai/status');
+    const { configured, models } = res;
+
+    container.innerHTML = `
+      <div style="background: ${configured.vision ? 'var(--color-success-bg)' : 'var(--color-warning-bg)'}; border: 1px solid ${configured.vision ? 'var(--color-success)' : 'var(--color-warning)'}; border-radius: var(--radius-sm); padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+        <strong>Vision:</strong> ${configured.vision ? models.vision : 'Fallback Template'}
+      </div>
+      <div style="background: ${configured.reasoning ? 'var(--color-success-bg)' : 'var(--color-warning-bg)'}; border: 1px solid ${configured.reasoning ? 'var(--color-success)' : 'var(--color-warning)'}; border-radius: var(--radius-sm); padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+        <strong>Reasoning:</strong> ${configured.reasoning ? models.reasoning : 'Deterministic Rules'}
+      </div>
+      <div style="background: ${configured.decision ? 'var(--color-success-bg)' : 'var(--color-warning-bg)'}; border: 1px solid ${configured.decision ? 'var(--color-success)' : 'var(--color-warning)'}; border-radius: var(--radius-sm); padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+        <strong>Decision:</strong> ${configured.decision ? models.decision : 'Deterministic Heuristic'}
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">Status offline</span>`;
+  }
+}
+
+function setupAiSubtabs() {
+  document.querySelectorAll('[data-ai-subtab]').forEach(btn => {
+    btn.onclick = () => {
+      const subtab = btn.getAttribute('data-ai-subtab');
+      document.querySelectorAll('[data-ai-subtab]').forEach(b => {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-secondary');
+      });
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-secondary');
+
+      document.querySelectorAll('.ai-subpanel').forEach(p => p.style.display = 'none');
+      const target = document.getElementById(`ai-subpanel-${subtab}`);
+      if (target) target.style.display = 'block';
+    };
+  });
+}
+
+function populateVisionSectionSelector() {
+  const sel = document.getElementById('vision-target-section');
+  if (!sel || !masterData?.sections) return;
+  sel.innerHTML = masterData.sections.map(s => `
+    <option value="${s.id}">${s.name} (${s.department_code || 'Dept'} · Sem ${s.semester})</option>
+  `).join('');
+}
+
+async function populateReasoningVersionSelector() {
+  const sel = document.getElementById('reasoning-version-selector');
+  if (!sel) return;
+
+  try {
+    const versions = await apiRequest('/api/timetable/versions');
+    sel.innerHTML = versions.map(v => `
+      <option value="${v.id}" ${v.status === 'active' ? 'selected' : ''}>${v.name} (${v.status.toUpperCase()})</option>
+    `).join('');
+  } catch (err) {
+    console.error('Failed to load versions for reasoning:', err);
+  }
+}
+
+async function populateDecisionAffectedSlots() {
+  const sel = document.getElementById('decision-affected-slot-selector');
+  if (!sel) return;
+
+  try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const absences = await apiRequest(`/api/absence/board?date=${todayStr}`);
+    const openSlots = [];
+
+    absences.forEach(abs => {
+      (abs.affectedClasses || []).forEach(cls => {
+        if (!cls.substitute_faculty_id) {
+          openSlots.push({
+            timetableEntryId: cls.id,
+            dateStr: abs.date,
+            label: `${abs.date} · Period ${cls.slot_no} (${cls.start_time}) - ${cls.subject_name} (${cls.section_name}) - Absent: ${abs.faculty_name}`
+          });
+        }
+      });
+    });
+
+    if (openSlots.length === 0) {
+      sel.innerHTML = `<option value="">No open absence slots today (all covered)</option>`;
+    } else {
+      sel.innerHTML = openSlots.map(s => `
+        <option value="${s.timetableEntryId}" data-date="${s.dateStr}">${s.label}</option>
+      `).join('');
+    }
+  } catch (err) {
+    sel.innerHTML = `<option value="">Unable to load open absence slots</option>`;
+  }
+}
+
+async function populateDecisionTimetableEntries() {
+  const sel = document.getElementById('decision-reschedule-entry-selector');
+  if (!sel) return;
+
+  try {
+    const versions = await apiRequest('/api/timetable/versions');
+    const active = versions.find(v => v.status === 'active') || versions[0];
+    if (!active) return;
+
+    const data = await apiRequest(`/api/timetable/versions/${active.id}`);
+    sel.innerHTML = (data.entries || []).slice(0, 30).map(e => `
+      <option value="${e.id}">${e.day_name} P${e.slot_no} · ${e.subject_code} (${e.section_name}) - ${e.faculty_name} [${e.room_name}]</option>
+    `).join('');
+  } catch (err) {
+    sel.innerHTML = `<option value="">Unable to load timetable classes</option>`;
+  }
+}
+
+function setupAiCenterEvents() {
+  // Vision File Input
+  const fileInput = document.getElementById('vision-file-input');
+  const fileNameDisplay = document.getElementById('vision-file-name');
+  fileInput?.addEventListener('change', () => {
+    if (fileInput.files && fileInput.files[0]) {
+      selectedVisionFile = fileInput.files[0];
+      fileNameDisplay.textContent = `Selected: ${selectedVisionFile.name} (${(selectedVisionFile.size / 1024).toFixed(1)} KB)`;
+    }
+  });
+
+  // Use Sample Image Button
+  document.getElementById('btn-use-sample-image')?.addEventListener('click', () => {
+    selectedVisionFile = null;
+    if (fileInput) fileInput.value = '';
+    fileNameDisplay.textContent = 'Selected: Realistic University Timetable Capture (Demo)';
+    showToast('Loaded demo university timetable capture for extraction', 'info');
+  });
+
+  // Process Vision Button
+  document.getElementById('btn-process-vision')?.addEventListener('click', async () => {
+    const secSelect = document.getElementById('vision-target-section');
+    const sectionId = secSelect ? secSelect.value : null;
+    const sectionName = secSelect ? secSelect.options[secSelect.selectedIndex]?.text : 'CSE-4A';
+
+    const btn = document.getElementById('btn-process-vision');
+    btn.disabled = true;
+    btn.textContent = '⏳ Processing Image with Vision Model...';
+
+    try {
+      let res;
+      if (selectedVisionFile) {
+        const formData = new FormData();
+        formData.append('image', selectedVisionFile);
+        formData.append('sectionId', sectionId);
+        formData.append('sectionName', sectionName);
+
+        const token = localStorage.getItem('ctas_token');
+        const fetchRes = await fetch('/api/ai/vision-import', {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData
+        });
+        res = await fetchRes.json();
+      } else {
+        res = await apiRequest('/api/ai/vision-import', {
+          method: 'POST',
+          body: JSON.stringify({ useSample: true, sectionId, sectionName })
+        });
+      }
+
+      if (res.success && res.mappedCells) {
+        currentExtractedReviewData = res;
+        renderVisionReviewTable(res);
+        showToast(`Extracted ${res.mappedCells.length} class slots successfully (${res.mode})`, 'success');
+      } else {
+        showToast(res.error || 'Failed to extract timetable from image', 'error');
+      }
+    } catch (err) {
+      showToast('Vision processing failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '⚡ Process & Extract Timetable';
+    }
+  });
+
+  // Confirm Vision Import -> Create Draft
+  document.getElementById('btn-confirm-vision-import')?.addEventListener('click', async () => {
+    if (!currentExtractedReviewData) return;
+
+    const versionName = document.getElementById('vision-version-name')?.value || 'Digitized Timetable Import';
+    const rows = document.querySelectorAll('#vision-review-tbody tr');
+    const cellsToSave = [];
+
+    rows.forEach(tr => {
+      const dayId = parseInt(tr.querySelector('.cell-day-select')?.value, 10);
+      const slotId = parseInt(tr.querySelector('.cell-slot-select')?.value, 10);
+      const subjectId = parseInt(tr.querySelector('.cell-sub-select')?.value, 10);
+      const facultyId = parseInt(tr.querySelector('.cell-fac-select')?.value, 10);
+      const roomId = parseInt(tr.querySelector('.cell-room-select')?.value, 10);
+      const isLab = tr.querySelector('.cell-lab-check')?.checked ? 1 : 0;
+      const sectionId = parseInt(document.getElementById('vision-target-section')?.value, 10) || 1;
+
+      if (dayId && slotId && subjectId && facultyId && roomId) {
+        cellsToSave.push({
+          sectionId,
+          subjectId,
+          facultyId,
+          roomId,
+          dayId,
+          slotId,
+          isLabBlock: isLab
+        });
+      }
+    });
+
+    if (cellsToSave.length === 0) {
+      showToast('No valid complete cells to save', 'warning');
+      return;
+    }
+
+    try {
+      const res = await apiRequest('/api/ai/import-confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          versionName,
+          cells: cellsToSave,
+          notes: `Imported via Grok Vision from timetable image. ${cellsToSave.length} periods verified.`
+        })
+      });
+
+      showToast(`Draft timetable "${versionName}" created!`, 'success');
+      // Switch to Studio with the newly created version
+      await switchTab('studio');
+      const versionSelector = document.getElementById('studio-version-selector');
+      if (versionSelector) {
+        versionSelector.value = res.versionId;
+        await loadStudioVersion(res.versionId);
+      }
+    } catch (err) {
+      showToast('Failed to save imported timetable: ' + err.message, 'error');
+    }
+  });
+
+  // Run Grok Clash Reasoning
+  document.getElementById('btn-run-reasoning')?.addEventListener('click', async () => {
+    const versionSelect = document.getElementById('reasoning-version-selector');
+    const versionId = versionSelect ? versionSelect.value : null;
+
+    const btn = document.getElementById('btn-run-reasoning');
+    btn.disabled = true;
+    btn.textContent = '🧠 Analyzing Conflicts with Grok...';
+
+    const container = document.getElementById('reasoning-issues-container');
+    container.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);">Running constraint validator and Grok reasoning analysis...</div>';
+
+    try {
+      const res = await apiRequest('/api/ai/analyze-version', {
+        method: 'POST',
+        body: JSON.stringify({ versionId })
+      });
+
+      renderReasoningIssues(res);
+      showToast(`Analysis complete: ${res.issues.length} issue(s) diagnosed`, 'info');
+    } catch (err) {
+      container.innerHTML = `<div style="padding: 1rem; color: var(--color-error);">Clash analysis failed: ${err.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🧠 Run AI Clash Analysis';
+    }
+  });
+
+  // Rank Substitute Candidates with Grok Decision
+  document.getElementById('btn-rank-substitutes-ai')?.addEventListener('click', async () => {
+    const sel = document.getElementById('decision-affected-slot-selector');
+    const entryId = sel ? sel.value : null;
+    const dateStr = sel?.options[sel.selectedIndex]?.getAttribute('data-date') || new Date().toISOString().slice(0, 10);
+
+    if (!entryId) {
+      showToast('Please select an active substitution slot to evaluate', 'warning');
+      return;
+    }
+
+    const resultBox = document.getElementById('decision-rank-result');
+    resultBox.innerHTML = '<div style="padding: 1rem; color: var(--text-muted);">Evaluating qualified faculty with Grok Decision...</div>';
+
+    try {
+      const res = await apiRequest('/api/ai/decision/rank-substitutes', {
+        method: 'POST',
+        body: JSON.stringify({ timetableEntryId: entryId, dateStr })
+      });
+
+      renderDecisionRankResult(res);
+    } catch (err) {
+      resultBox.innerHTML = `<div style="color: var(--color-error); padding: 0.5rem;">Ranking error: ${err.message}</div>`;
+    }
+  });
+
+  // Find Reschedule Slots
+  document.getElementById('btn-find-reschedule-slots')?.addEventListener('click', async () => {
+    const sel = document.getElementById('decision-reschedule-entry-selector');
+    const entryId = sel ? sel.value : null;
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    if (!entryId) {
+      showToast('Please select a timetable class', 'warning');
+      return;
+    }
+
+    const resultBox = document.getElementById('decision-reschedule-result');
+    resultBox.innerHTML = '<div style="padding: 1rem; color: var(--text-muted);">Calculating collision-free alternative slots...</div>';
+
+    try {
+      const res = await apiRequest('/api/ai/decision/reschedule-slots', {
+        method: 'POST',
+        body: JSON.stringify({ timetableEntryId: entryId, dateStr })
+      });
+
+      renderRescheduleSlotsResult(res);
+    } catch (err) {
+      resultBox.innerHTML = `<div style="color: var(--color-error); padding: 0.5rem;">Reschedule search error: ${err.message}</div>`;
+    }
+  });
+}
+
+function renderVisionReviewTable(data) {
+  const container = document.getElementById('vision-review-container');
+  const tbody = document.getElementById('vision-review-tbody');
+  const statsSpan = document.getElementById('vision-review-stats');
+  if (!container || !tbody) return;
+
+  container.style.display = 'block';
+
+  const cells = data.mappedCells || [];
+  const dict = data.dictionaries || {};
+
+  statsSpan.textContent = `Total extracted: ${cells.length} slots · Section: ${data.sectionName}`;
+
+  tbody.innerHTML = cells.map((cell, idx) => {
+    const isHighConf = (cell.confidence || 0) >= 0.85;
+    const rowBg = cell.needsReview ? 'background: var(--color-warning-bg);' : '';
+
+    return `
+      <tr style="border-bottom: 1px solid var(--border-subtle); ${rowBg}">
+        <td style="padding: 0.5rem 0.6rem;">
+          <select class="cell-day-select" style="font-size: 0.8rem; padding: 0.25rem;">
+            ${(dict.days || []).map(d => `
+              <option value="${d.id}" ${d.id === cell.dayId ? 'selected' : ''}>${d.day_name}</option>
+            `).join('')}
+          </select>
+        </td>
+
+        <td style="padding: 0.5rem 0.6rem;">
+          <select class="cell-slot-select" style="font-size: 0.8rem; padding: 0.25rem;">
+            ${(dict.slots || []).filter(s => !s.is_break).map(s => `
+              <option value="${s.id}" ${s.id === cell.slotId ? 'selected' : ''}>P${s.slot_no} (${s.start_time})</option>
+            `).join('')}
+          </select>
+        </td>
+
+        <td style="padding: 0.5rem 0.6rem; font-weight: 600;">
+          ${cell.original?.subjectCode || cell.original?.subjectName || 'Unlabeled'}
+        </td>
+
+        <td style="padding: 0.5rem 0.6rem;">
+          <select class="cell-sub-select" style="font-size: 0.8rem; padding: 0.25rem; max-width: 170px;">
+            ${(dict.subjects || []).map(sub => `
+              <option value="${sub.id}" ${sub.id === cell.subjectId ? 'selected' : ''}>${sub.code} - ${sub.name}</option>
+            `).join('')}
+          </select>
+        </td>
+
+        <td style="padding: 0.5rem 0.6rem;">
+          <select class="cell-fac-select" style="font-size: 0.8rem; padding: 0.25rem; max-width: 160px;">
+            ${(dict.faculty || []).map(f => `
+              <option value="${f.id}" ${f.id === cell.facultyId ? 'selected' : ''}>${f.name}</option>
+            `).join('')}
+          </select>
+        </td>
+
+        <td style="padding: 0.5rem 0.6rem;">
+          <select class="cell-room-select" style="font-size: 0.8rem; padding: 0.25rem; max-width: 130px;">
+            ${(dict.rooms || []).map(r => `
+              <option value="${r.id}" ${r.id === cell.roomId ? 'selected' : ''}>${r.name} (${r.type})</option>
+            `).join('')}
+          </select>
+        </td>
+
+        <td style="padding: 0.5rem 0.6rem; text-align: center;">
+          <input type="checkbox" class="cell-lab-check" ${cell.isLabBlock ? 'checked' : ''}>
+        </td>
+
+        <td style="padding: 0.5rem 0.6rem;">
+          <span style="font-size: 0.75rem; padding: 0.2rem 0.45rem; border-radius: var(--radius-sm); background: ${isHighConf ? 'var(--color-success-bg)' : 'var(--color-warning-bg)'}; color: ${isHighConf ? 'var(--color-success)' : 'var(--color-warning)'}; font-weight: 700;">
+            ${Math.round((cell.confidence || 0.85) * 100)}%
+          </span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderReasoningIssues(data) {
+  const container = document.getElementById('reasoning-issues-container');
+  if (!container) return;
+
+  const issues = data.issues || [];
+  if (issues.length === 0) {
+    container.innerHTML = `
+      <div style="padding: 2rem; text-align: center; background: var(--color-success-bg); border: 1px solid var(--color-success); border-radius: var(--radius-md);">
+        <h4 style="color: var(--color-success); font-size: 1.25rem; margin-bottom: 0.25rem;">✓ Zero Conflicts Detected</h4>
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">
+          This timetable version complies completely with all hard constraints and college policies.
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = issues.map((iss, idx) => {
+    const isError = iss.severity === 'error' || iss.severity === 'critical';
+    const badgeColor = isError ? 'var(--color-error)' : 'var(--color-warning)';
+    const badgeBg = isError ? 'var(--color-error-bg)' : 'var(--color-warning-bg)';
+
+    return `
+      <div class="card" style="border-left: 4px solid ${badgeColor}; padding: 1.25rem; background: var(--bg-surface-subtle);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; background: ${badgeBg}; color: ${badgeColor}; padding: 0.2rem 0.5rem; border-radius: var(--radius-sm); margin-right: 0.5rem;">
+              ${iss.severity} · ${iss.category || 'Conflict'}
+            </span>
+            <strong style="font-size: 1rem; color: var(--text-primary);">${iss.summary}</strong>
+          </div>
+          <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.6rem;" onclick="window.switchTab('studio')">
+            Open in Studio &rarr;
+          </button>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.45;">
+          ${iss.reasoning}
+        </p>
+
+        ${iss.suggestedFix ? `
+          <div style="background: var(--bg-surface); padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-size: 0.8rem;">
+            <div style="font-weight: 600; color: var(--color-brand-primary); margin-bottom: 0.25rem;">
+              💡 Proposed Fix: ${iss.suggestedFix.description}
+            </div>
+            ${iss.suggestedFix.expectedSideEffects ? `
+              <div style="color: var(--text-muted); font-size: 0.75rem;">
+                Tradeoff / Side effect: ${iss.suggestedFix.expectedSideEffects}
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderDecisionRankResult(data) {
+  const box = document.getElementById('decision-rank-result');
+  if (!box) return;
+
+  if (!data.hasCandidates || (data.rankedOptions || []).length === 0) {
+    box.innerHTML = `
+      <div style="padding: 1rem; background: var(--color-error-bg); border-radius: var(--radius-sm); border: 1px solid var(--color-error); color: var(--color-error);">
+        <strong>No Candidates Available:</strong> ${data.justification}
+      </div>
+    `;
+    return;
+  }
+
+  const top = data.rankedOptions[0];
+
+  box.innerHTML = `
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1rem; margin-top: 0.75rem;">
+      <div style="font-size: 0.75rem; font-weight: 700; color: var(--color-brand-primary); text-transform: uppercase;">
+        Top Recommended Candidate (${data.mode})
+      </div>
+      <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin: 0.2rem 0;">
+        ${top.name}
+      </div>
+      <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+        ${data.justification}
+      </p>
+
+      ${data.risks && data.risks.length > 0 ? `
+        <div style="font-size: 0.75rem; color: var(--color-warning); margin-bottom: 0.75rem;">
+          ⚠️ Risk assessment: ${data.risks.join('; ')}
+        </div>
+      ` : ''}
+
+      <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+        <button class="btn-primary" style="font-size: 0.8rem; padding: 0.4rem 0.85rem;" onclick="window.applyAiSubstituteAssignment(${data.timetableEntryId}, '${data.dateStr}', ${top.facultyId})">
+          ✓ One-Click Approve &amp; Assign ${top.name}
+        </button>
+      </div>
+
+      <div style="margin-top: 1rem; border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
+        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem;">All Evaluated Candidates:</div>
+        ${data.rankedOptions.map(c => `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0; border-bottom: 1px dashed var(--border-subtle); font-size: 0.75rem;">
+            <span>#${c.aiRank || 1} <strong>${c.name}</strong> (${c.departmentName})</span>
+            <span style="color: var(--color-brand-primary); font-weight: 600;">${c.aiSummary || (c.score + ' pts')}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+window.applyAiSubstituteAssignment = async (entryId, dateStr, facultyId) => {
+  try {
+    await apiRequest('/api/absence/substitutions/assign', {
+      method: 'POST',
+      body: JSON.stringify({
+        timetableEntryId: entryId,
+        dateStr,
+        substituteFacultyId: facultyId
+      })
+    });
+    showToast('AI substitute recommendation approved and assigned!', 'success');
+    await populateDecisionAffectedSlots();
+    await loadAbsenceMonitor();
+    await loadOverview();
+  } catch (err) {
+    showToast('Failed to assign substitute: ' + err.message, 'error');
+  }
+};
+
+function renderRescheduleSlotsResult(data) {
+  const box = document.getElementById('decision-reschedule-result');
+  if (!box) return;
+
+  const slots = data.candidateSlots || [];
+  if (slots.length === 0) {
+    box.innerHTML = `
+      <div style="padding: 1rem; background: var(--bg-surface); border-radius: var(--radius-sm); border: 1px dashed var(--border-subtle); color: var(--text-muted); text-align: center;">
+        No completely open slots found for this cohort without moving other classes.
+      </div>
+    `;
+    return;
+  }
+
+  box.innerHTML = `
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1rem; margin-top: 0.75rem;">
+      <div style="font-size: 0.75rem; font-weight: 700; color: var(--color-brand-primary); text-transform: uppercase; margin-bottom: 0.5rem;">
+        Conflict-Free Replacement Periods
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        ${slots.map(s => `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-surface-subtle); border-radius: var(--radius-sm); font-size: 0.8rem;">
+            <div>
+              <strong>${s.dayName}</strong> · Period ${s.slotNo} (${s.startTime} - ${s.endTime})
+            </div>
+            <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="window.switchTab('studio')">
+              Select in Studio &rarr;
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
 export default { switchTab };
+

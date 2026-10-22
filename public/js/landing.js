@@ -74,4 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // Instant Presentation Demo Mode
+  document.getElementById('btn-instant-demo')?.addEventListener('click', async () => {
+    showToast('Starting instant presentation demo mode...', 'info');
+    try {
+      await login('admin', 'Admin@123', 'admin');
+    } catch (err) {
+      showToast('Demo login failed: ' + err.message, 'error');
+    }
+  });
 });

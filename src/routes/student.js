@@ -141,6 +141,7 @@ router.get('/schedule', (req, res) => {
     isHoliday: Boolean(holiday),
     holidayDescription: holiday?.description || null,
     todaySchedule: scheduleWithStatus,
+    schedule: scheduleWithStatus,
     fullWeeklySchedule: entries
   });
 });

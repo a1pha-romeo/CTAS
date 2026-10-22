@@ -211,6 +211,20 @@ router.post('/sections', (req, res) => {
   res.status(201).json({ success: true, id: result.lastInsertRowid });
 });
 
+router.put('/sections/:id', (req, res) => {
+  const secId = parseInt(req.params.id, 10);
+  const { name, semester, departmentId, strength } = req.body;
+  const db = getDatabase();
+
+  db.prepare(`
+    UPDATE sections
+    SET name = ?, semester = ?, department_id = ?, strength = ?
+    WHERE id = ?
+  `).run(name, semester, departmentId, strength || 40, secId);
+
+  res.json({ success: true, message: 'Section updated successfully' });
+});
+
 router.delete('/sections/:id', (req, res) => {
   const secId = parseInt(req.params.id, 10);
   const db = getDatabase();
@@ -237,6 +251,20 @@ router.post('/rooms', (req, res) => {
   `).run(name, type, capacity, isActive ?? 1);
 
   res.status(201).json({ success: true, id: result.lastInsertRowid });
+});
+
+router.put('/rooms/:id', (req, res) => {
+  const roomId = parseInt(req.params.id, 10);
+  const { name, type, capacity, isActive } = req.body;
+  const db = getDatabase();
+
+  db.prepare(`
+    UPDATE rooms
+    SET name = ?, type = ?, capacity = ?, is_active = ?
+    WHERE id = ?
+  `).run(name, type, capacity, isActive ?? 1, roomId);
+
+  res.json({ success: true, message: 'Room updated successfully' });
 });
 
 router.delete('/rooms/:id', (req, res) => {
@@ -272,6 +300,52 @@ router.delete('/holidays/:id', (req, res) => {
   const db = getDatabase();
   db.prepare('DELETE FROM holidays WHERE id = ?').run(holidayId);
   res.json({ success: true, message: 'Holiday removed' });
+});
+
+// 7b. Departments CRUD
+router.post('/departments', (req, res) => {
+  const { name, code } = req.body;
+  const db = getDatabase();
+
+  const result = db.prepare(`
+    INSERT INTO departments (name, code)
+    VALUES (?, ?)
+  `).run(name, code);
+
+  res.status(201).json({ success: true, id: result.lastInsertRowid });
+});
+
+router.put('/departments/:id', (req, res) => {
+  const deptId = parseInt(req.params.id, 10);
+  const { name, code } = req.body;
+  const db = getDatabase();
+
+  db.prepare(`
+    UPDATE departments
+    SET name = ?, code = ?
+    WHERE id = ?
+  `).run(name, code, deptId);
+
+  res.json({ success: true, message: 'Department updated successfully' });
+});
+
+router.delete('/departments/:id', (req, res) => {
+  const deptId = parseInt(req.params.id, 10);
+  const db = getDatabase();
+
+  const facUsage = db.prepare('SELECT COUNT(*) as count FROM faculty WHERE department_id = ?').get(deptId).count;
+  const subUsage = db.prepare('SELECT COUNT(*) as count FROM subjects WHERE department_id = ?').get(deptId).count;
+  const secUsage = db.prepare('SELECT COUNT(*) as count FROM sections WHERE department_id = ?').get(deptId).count;
+  const total = facUsage + subUsage + secUsage;
+
+  if (total > 0 && req.query.force !== 'true') {
+    return res.status(409).json({
+      error: `Department has ${facUsage} faculty, ${subUsage} subjects, and ${secUsage} sections attached. Cannot delete without force.`
+    });
+  }
+
+  db.prepare('DELETE FROM departments WHERE id = ?').run(deptId);
+  res.json({ success: true, message: 'Department deleted successfully' });
 });
 
 // 8. Faculty Availability Grid (Weekly Matrix)

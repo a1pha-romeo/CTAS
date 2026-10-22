@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 
 import config from './src/config/env.js';
 import { getDatabase } from './src/db/connection.js';
+import { seedDatabase } from './src/db/seed.js';
 import errorHandler from './src/middleware/errorHandler.js';
 
 // Route imports
@@ -55,9 +56,15 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// Serve static frontend files from /public
+// Serve static frontend files from /public both at root and /public
 const publicDir = path.resolve(__dirname, 'public');
 app.use(express.static(publicDir));
+app.use('/public', express.static(publicDir));
+
+// Direct portal routes
+app.get(['/admin', '/admin/'], (req, res) => res.sendFile(path.join(publicDir, 'admin', 'index.html')));
+app.get(['/faculty', '/faculty/'], (req, res) => res.sendFile(path.join(publicDir, 'faculty', 'index.html')));
+app.get(['/student', '/student/'], (req, res) => res.sendFile(path.join(publicDir, 'student', 'index.html')));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -89,9 +96,17 @@ app.get('/', (req, res) => {
 // Centralized error handler
 app.use(errorHandler);
 
-// Initialize DB on boot
+// Initialize DB on boot & auto-seed if empty
 try {
   const db = getDatabase();
+  const userTable = db.prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='users'").get();
+  if (userTable && userTable.count > 0) {
+    const userCount = db.prepare("SELECT count(*) as count FROM users").get();
+    if (!userCount || userCount.count === 0) {
+      console.log('[CTAS] Database empty - auto-seeding sample college data...');
+      seedDatabase(db);
+    }
+  }
   console.log(`[CTAS] SQLite database ready at ${config.dbPath}`);
 } catch (err) {
   console.error('[CTAS] Failed to initialize database:', err);

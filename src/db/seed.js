@@ -1,13 +1,13 @@
 import bcrypt from 'bcryptjs';
 import { getDatabase, initSchema } from './connection.js';
 
-console.log('[CTAS Seeder] Starting database seeding with realistic academic college data...');
+export function seedDatabase(customDb) {
+  const db = customDb || getDatabase();
+  initSchema(db);
+  console.log('[CTAS Seeder] Starting database seeding with realistic academic college data...');
 
-const db = getDatabase();
-initSchema(db);
-
-// Wrap everything in a database transaction for atomicity and speed
-const seedTransaction = db.transaction(() => {
+  // Wrap everything in a database transaction for atomicity and speed
+  const seedTransaction = db.transaction(() => {
   // Clear existing records in child-to-parent order
   db.exec(`
     DELETE FROM substitutions;
@@ -29,6 +29,7 @@ const seedTransaction = db.transaction(() => {
     DELETE FROM notifications;
     DELETE FROM audit_log;
     DELETE FROM ai_issue_log;
+    DELETE FROM sqlite_sequence;
   `);
 
   console.log('[CTAS Seeder] Cleaned existing tables.');
@@ -70,9 +71,9 @@ const seedTransaction = db.transaction(() => {
     { no: 8, start: '14:20', end: '15:10', isBreak: 0, label: 'Period 6' },
     { no: 9, start: '15:10', end: '16:00', isBreak: 0, label: 'Period 7' }
   ];
-  const slotIds = [];
+  const slotIds = {};
   for (const s of slotsConfig) {
-    slotIds.push(insertSlot.run(s.no, s.start, s.end, s.isBreak, s.label).lastInsertRowid);
+    slotIds[s.no] = insertSlot.run(s.no, s.start, s.end, s.isBreak, s.label).lastInsertRowid;
   }
 
   // 4. Rooms (8 Classrooms and 3 Labs)
@@ -303,7 +304,7 @@ const seedTransaction = db.transaction(() => {
         if (!slot.isBreak) {
           // Default available; Knuth takes Saturday off
           const isAvail = (facKey === 'faculty3' && dId === dayIds[5]) ? 0 : 1;
-          insertAvail.run(fId, dId, slot.no, isAvail);
+          insertAvail.run(fId, dId, slotIds[slot.no], isAvail);
         }
       }
     }
@@ -331,45 +332,45 @@ const seedTransaction = db.transaction(() => {
   // Sample conflict-free placements for CSE-4A across the week
   // Day 1 (Monday):
   // Period 1 (Slot 1): CS201 with Turing in CR-101
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201'], facultyIds['faculty1'], roomIds.classrooms[0], dayIds[0], 1, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201'], facultyIds['faculty1'], roomIds.classrooms[0], dayIds[0], slotIds[1], 0, 0);
   // Period 2 (Slot 2): CS202 with Hopper in CR-101
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS202'], facultyIds['faculty2'], roomIds.classrooms[0], dayIds[0], 2, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS202'], facultyIds['faculty2'], roomIds.classrooms[0], dayIds[0], slotIds[2], 0, 0);
   // Period 3 & 4 (Slot 4 & 5): CS201L Lab with Turing in Computing Lab A (contiguous block!)
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201L'], facultyIds['faculty1'], roomIds.labs[0], dayIds[0], 4, 1, 0);
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201L'], facultyIds['faculty1'], roomIds.labs[0], dayIds[0], 5, 1, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201L'], facultyIds['faculty1'], roomIds.labs[0], dayIds[0], slotIds[4], 1, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201L'], facultyIds['faculty1'], roomIds.labs[0], dayIds[0], slotIds[5], 1, 0);
   // Period 5 (Slot 7): CS203 with Lovelace in CR-101
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS203'], facultyIds['faculty4'], roomIds.classrooms[0], dayIds[0], 7, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS203'], facultyIds['faculty4'], roomIds.classrooms[0], dayIds[0], slotIds[7], 0, 0);
 
   // Day 2 (Tuesday):
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS204'], facultyIds['faculty5'], roomIds.classrooms[0], dayIds[1], 1, 0, 0);
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS205'], facultyIds['faculty3'], roomIds.classrooms[0], dayIds[1], 2, 0, 0);
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201'], facultyIds['faculty1'], roomIds.classrooms[0], dayIds[1], 4, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS204'], facultyIds['faculty5'], roomIds.classrooms[0], dayIds[1], slotIds[1], 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS205'], facultyIds['faculty3'], roomIds.classrooms[0], dayIds[1], slotIds[2], 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201'], facultyIds['faculty1'], roomIds.classrooms[0], dayIds[1], slotIds[4], 0, 0);
 
   // Day 3 (Wednesday):
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS206'], facultyIds['faculty10'], roomIds.classrooms[0], dayIds[2], 1, 0, 0);
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS202'], facultyIds['faculty2'], roomIds.classrooms[0], dayIds[2], 2, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS206'], facultyIds['faculty10'], roomIds.classrooms[0], dayIds[2], slotIds[1], 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS202'], facultyIds['faculty2'], roomIds.classrooms[0], dayIds[2], slotIds[2], 0, 0);
   // Lab block CS203L
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS203L'], facultyIds['faculty4'], roomIds.labs[1], dayIds[2], 4, 1, 0);
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS203L'], facultyIds['faculty4'], roomIds.labs[1], dayIds[2], 5, 1, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS203L'], facultyIds['faculty4'], roomIds.labs[1], dayIds[2], slotIds[4], 1, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS203L'], facultyIds['faculty4'], roomIds.labs[1], dayIds[2], slotIds[5], 1, 0);
 
   // Day 4 (Thursday):
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS203'], facultyIds['faculty4'], roomIds.classrooms[0], dayIds[3], 1, 0, 0);
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS204'], facultyIds['faculty5'], roomIds.classrooms[0], dayIds[3], 2, 0, 0);
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS205'], facultyIds['faculty3'], roomIds.classrooms[0], dayIds[3], 4, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS203'], facultyIds['faculty4'], roomIds.classrooms[0], dayIds[3], slotIds[1], 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS204'], facultyIds['faculty5'], roomIds.classrooms[0], dayIds[3], slotIds[2], 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS205'], facultyIds['faculty3'], roomIds.classrooms[0], dayIds[3], slotIds[4], 0, 0);
 
   // Day 5 (Friday):
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201'], facultyIds['faculty1'], roomIds.classrooms[0], dayIds[4], 1, 0, 0);
-  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS206'], facultyIds['faculty10'], roomIds.classrooms[0], dayIds[4], 2, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS201'], facultyIds['faculty1'], roomIds.classrooms[0], dayIds[4], slotIds[1], 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.csea, subjectIds['CS206'], facultyIds['faculty10'], roomIds.classrooms[0], dayIds[4], slotIds[2], 0, 0);
 
   // Non-clashing placements for CSE-4B on Day 1 (Monday) using CR-102 and Knuth/Torvalds
-  insertEntry.run(activeVersionId, sectionIds.cseb, subjectIds['CS201'], facultyIds['faculty3'], roomIds.classrooms[1], dayIds[0], 1, 0, 0);
-  insertEntry.run(activeVersionId, sectionIds.cseb, subjectIds['CS202'], facultyIds['faculty7'], roomIds.classrooms[1], dayIds[0], 2, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.cseb, subjectIds['CS201'], facultyIds['faculty3'], roomIds.classrooms[1], dayIds[0], slotIds[1], 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.cseb, subjectIds['CS202'], facultyIds['faculty7'], roomIds.classrooms[1], dayIds[0], slotIds[2], 0, 0);
 
   // Placements for IT-4A on Day 1 using CR-103 and Berners-Lee
-  insertEntry.run(activeVersionId, sectionIds.ita, subjectIds['IT201'], facultyIds['faculty6'], roomIds.classrooms[2], dayIds[0], 1, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.ita, subjectIds['IT201'], facultyIds['faculty6'], roomIds.classrooms[2], dayIds[0], slotIds[1], 0, 0);
 
   // Placements for ECE-4A on Day 1 using CR-104 and Margaret Hamilton
-  insertEntry.run(activeVersionId, sectionIds.ecea, subjectIds['EC201'], facultyIds['faculty8'], roomIds.classrooms[3], dayIds[0], 1, 0, 0);
+  insertEntry.run(activeVersionId, sectionIds.ecea, subjectIds['EC201'], facultyIds['faculty8'], roomIds.classrooms[3], dayIds[0], slotIds[1], 0, 0);
 
   // 13. Holidays
   const insertHoliday = db.prepare('INSERT INTO holidays (date, description) VALUES (?, ?)');
@@ -389,32 +390,42 @@ const seedTransaction = db.transaction(() => {
   }));
 });
 
-// Execute the transaction
-seedTransaction();
+  // Execute the transaction
+  seedTransaction();
 
-console.log('\n========================================================================');
-console.log(' [CTAS Seeder] DATABASE SEEDED SUCCESSFULLY WITH SAMPLE DATA');
-console.log('========================================================================');
-console.log(' Hard constraints enforced: PRAGMA foreign_keys=ON, journal_mode=WAL');
-console.log(' UNIQUE indexes active:');
-console.log('   - (version_id, section_id, day_id, slot_id)');
-console.log('   - (version_id, faculty_id, day_id, slot_id)');
-console.log('   - (version_id, room_id, day_id, slot_id)');
-console.log('   - Partial index: only one active timetable_version');
-console.log('------------------------------------------------------------------------');
-console.log(' DEFAULT CREDENTIALS CREATED (PLEASE CHANGE IN PRODUCTION):');
-console.log('------------------------------------------------------------------------');
-console.log(' 1. Administrator:');
-console.log('    Username: admin');
-console.log('    Password: Admin@123');
-console.log('');
-console.log(' 2. Faculty Members (10 accounts):');
-console.log('    Usernames: faculty1, faculty2, ..., faculty10');
-console.log('    Password:  Faculty@123');
-console.log('    Profiles:  Dr. Alan Turing, Dr. Grace Hopper, Prof. Donald Knuth, etc.');
-console.log('');
-console.log(' 3. Students (4 accounts):');
-console.log('    Usernames: student1, student2, student3, student4');
-console.log('    Password:  Student@123');
-console.log('    Mapped:    CSE-4A (Alex Mercer), CSE-4B, IT-4A, ECE-4A');
-console.log('========================================================================\n');
+  console.log('\n========================================================================');
+  console.log(' [CTAS Seeder] DATABASE SEEDED SUCCESSFULLY WITH SAMPLE DATA');
+  console.log('========================================================================');
+  console.log(' Hard constraints enforced: PRAGMA foreign_keys=ON, journal_mode=WAL');
+  console.log(' UNIQUE indexes active:');
+  console.log('   - (version_id, section_id, day_id, slot_id)');
+  console.log('   - (version_id, faculty_id, day_id, slot_id)');
+  console.log('   - (version_id, room_id, day_id, slot_id)');
+  console.log('   - Partial index: only one active timetable_version');
+  console.log('------------------------------------------------------------------------');
+  console.log(' DEFAULT CREDENTIALS CREATED (PLEASE CHANGE IN PRODUCTION):');
+  console.log('------------------------------------------------------------------------');
+  console.log(' 1. Administrator:');
+  console.log('    Username: admin');
+  console.log('    Password: Admin@123');
+  console.log('');
+  console.log(' 2. Faculty Members (10 accounts):');
+  console.log('    Usernames: faculty1, faculty2, ..., faculty10');
+  console.log('    Password:  Faculty@123');
+  console.log('    Profiles:  Dr. Alan Turing, Dr. Grace Hopper, Prof. Donald Knuth, etc.');
+  console.log('');
+  console.log(' 3. Students (4 accounts):');
+  console.log('    Usernames: student1, student2, student3, student4');
+  console.log('    Password:  Student@123');
+  console.log('    Mapped:    CSE-4A (Alex Mercer), CSE-4B, IT-4A, ECE-4A');
+  console.log('========================================================================\n');
+  return true;
+}
+
+// Auto-run if executed directly
+if (process.argv[1] && (process.argv[1].endsWith('seed.js') || process.argv[1].includes('seed.js'))) {
+  seedDatabase();
+}
+
+export default seedDatabase;
+

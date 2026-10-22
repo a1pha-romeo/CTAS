@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import app from '../server.js';
+import { SEED_PASSWORDS } from '../src/db/seed.js';
 
 let serverInstance;
 let baseUrl;
@@ -27,13 +28,13 @@ test('Phase 3: Authentication and Role-Based Access Control (RBAC)', async (t) =
   let facultyToken;
   let studentToken;
 
-  await t.test('1. Admin login succeeds with Admin@123', async () => {
+  await t.test('1. Admin login succeeds with secure admin password', async () => {
     const res = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: 'admin',
-        password: 'Admin@123',
+        password: SEED_PASSWORDS.admin,
         role: 'admin'
       })
     });
@@ -46,13 +47,13 @@ test('Phase 3: Authentication and Role-Based Access Control (RBAC)', async (t) =
     adminToken = data.token;
   });
 
-  await t.test('2. Faculty login succeeds with Faculty@123', async () => {
+  await t.test('2. Faculty login succeeds with secure faculty password', async () => {
     const res = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: 'faculty1',
-        password: 'Faculty@123',
+        password: SEED_PASSWORDS.faculty,
         role: 'faculty'
       })
     });
@@ -65,13 +66,13 @@ test('Phase 3: Authentication and Role-Based Access Control (RBAC)', async (t) =
     facultyToken = data.token;
   });
 
-  await t.test('3. Student login succeeds with Student@123', async () => {
+  await t.test('3. Student login succeeds with secure student password', async () => {
     const res = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: 'student1',
-        password: 'Student@123',
+        password: SEED_PASSWORDS.student,
         role: 'student'
       })
     });
@@ -104,7 +105,7 @@ test('Phase 3: Authentication and Role-Based Access Control (RBAC)', async (t) =
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: 'student1',
-        password: 'Student@123',
+        password: SEED_PASSWORDS.student,
         role: 'admin' // Mismatch
       })
     });
@@ -161,5 +162,104 @@ test('Phase 3: Authentication and Role-Based Access Control (RBAC)', async (t) =
     const data = await res.json();
     assert.strictEqual(data.section.name, 'CSE-4A');
     assert.ok(Array.isArray(data.schedule));
+  });
+
+  // Forgot Password & Secure Reset Flow Tests
+  let testResetToken;
+  await t.test('12. Forgot password request for registered email generates token and reset link', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@college.edu' })
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.strictEqual(data.accountFound, true);
+    assert.strictEqual(data.username, 'admin');
+    assert.ok(data.token, 'Expected reset token string');
+    assert.strictEqual(typeof data.token, 'string');
+    assert.strictEqual(data.token.length, 64);
+    assert.ok(data.resetUrl.includes(data.token));
+    testResetToken = data.token;
+  });
+
+  await t.test('13. Forgot password request for unknown email returns safe anti-enumeration message', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'nonexistent.user@unknown-domain.org' })
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.strictEqual(data.accountFound, false);
+    assert.strictEqual(data.token, undefined);
+  });
+
+  await t.test('14. Verify reset token succeeds for active token', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/verify-reset-token?token=${testResetToken}`);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.valid, true);
+    assert.strictEqual(data.username, 'admin');
+    assert.strictEqual(data.role, 'admin');
+  });
+
+  await t.test('15. Verify reset token rejects unknown or corrupted token', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/verify-reset-token?token=deadbeefdeadbeef0000111122223333444455556666777788889999aaaabbbb`);
+    assert.strictEqual(res.status, 404);
+    const data = await res.json();
+    assert.strictEqual(data.valid, false);
+  });
+
+  await t.test('16. Complete password reset with valid token updates password', async () => {
+    const newTestPassword = 'Admin#Reset!2026.NewPassword99';
+    const res = await fetch(`${baseUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: testResetToken,
+        newPassword: newTestPassword
+      })
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.strictEqual(data.username, 'admin');
+
+    // Verify login with new password succeeds
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'admin',
+        password: newTestPassword,
+        role: 'admin'
+      })
+    });
+
+    assert.strictEqual(loginRes.status, 200);
+    const loginData = await loginRes.json();
+    assert.strictEqual(loginData.success, true);
+    assert.strictEqual(loginData.user.username, 'admin');
+  });
+
+  await t.test('17. Reusing an already-consumed reset token is rejected', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: testResetToken,
+        newPassword: 'AnotherPassword123'
+      })
+    });
+
+    assert.strictEqual(res.status, 400);
+    const data = await res.json();
+    assert.ok(data.error.includes('consumed') || data.error.includes('already'));
   });
 });

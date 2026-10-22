@@ -1,6 +1,7 @@
 import config from '../../config/env.js';
 import { getDatabase } from '../../db/connection.js';
 import { callGrok } from './grokClient.js';
+import { getGeminiClient } from './geminiClient.js';
 
 /**
  * Deterministic explanation map for all validator violation codes
@@ -115,13 +116,14 @@ const VIOLATION_EXPLANATIONS = {
  */
 export async function explainClashes(versionId, violations = [], timetableContext = {}) {
   const db = getDatabase();
-  const isAiActive = Boolean(config.grok.reasoningApiKey);
+  const gemini = getGeminiClient();
+  const isGrokActive = Boolean(config.grok.reasoningApiKey);
+  let activeMode = 'deterministic_expert';
 
   let issues = [];
 
-  if (isAiActive && violations.length > 0) {
-    try {
-      const prompt = `
+  if (violations.length > 0) {
+    const prompt = `
 You are an expert university academic scheduling analyst.
 Explain the following timetable constraint violations in plain, actionable language.
 Timetable Version ID: ${versionId}
@@ -148,26 +150,49 @@ Return JSON ONLY with this schema:
 }
 `;
 
-      const messages = [
-        { role: 'user', content: prompt }
-      ];
+    // Try Gemini first if available
+    if (gemini) {
+      try {
+        const response = await gemini.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json'
+          }
+        });
+        const parsed = JSON.parse(response.text?.trim() || '{}');
+        issues = parsed.issues || [];
+        if (issues.length > 0) {
+          activeMode = 'gemini_reasoning';
+        }
+      } catch (err) {
+        console.warn('[ClashReasoner] Gemini reasoning call failed, attempting Grok fallback:', err.message);
+      }
+    }
 
-      const rawResponse = await callGrok({
-        apiKey: config.grok.reasoningApiKey,
-        model: config.grok.reasoningModel,
-        messages,
-        temperature: 0.2
-      });
+    // Try Grok if Gemini was not available or failed
+    if (issues.length === 0 && isGrokActive) {
+      try {
+        const rawResponse = await callGrok({
+          apiKey: config.grok.reasoningApiKey,
+          model: config.grok.reasoningModel,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.2
+        });
 
-      let clean = rawResponse.trim();
-      if (clean.startsWith('```json')) clean = clean.slice(7);
-      if (clean.startsWith('```')) clean = clean.slice(3);
-      if (clean.endsWith('```')) clean = clean.slice(0, -3);
-      const parsed = JSON.parse(clean.trim());
+        let clean = rawResponse.trim();
+        if (clean.startsWith('```json')) clean = clean.slice(7);
+        if (clean.startsWith('```')) clean = clean.slice(3);
+        if (clean.endsWith('```')) clean = clean.slice(0, -3);
+        const parsed = JSON.parse(clean.trim());
 
-      issues = parsed.issues || [];
-    } catch (err) {
-      console.warn('[ClashReasoner] Grok reasoning call failed, falling back to deterministic explanation:', err.message);
+        issues = parsed.issues || [];
+        if (issues.length > 0) {
+          activeMode = 'grok_reasoning';
+        }
+      } catch (err) {
+        console.warn('[ClashReasoner] Grok reasoning call failed, falling back to deterministic explanation:', err.message);
+      }
     }
   }
 
@@ -228,7 +253,7 @@ Return JSON ONLY with this schema:
   return {
     success: true,
     versionId,
-    mode: isAiActive ? 'grok_reasoning' : 'deterministic_expert',
+    mode: activeMode,
     issues
   };
 }

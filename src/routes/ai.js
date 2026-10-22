@@ -48,14 +48,16 @@ const upload = multer({
 router.get('/status', requireAuth, (req, res) => {
   res.json({
     configured: {
-      vision: Boolean(config.grok.visionApiKey),
-      reasoning: Boolean(config.grok.reasoningApiKey),
-      decision: Boolean(config.grok.decisionApiKey)
+      gemini: Boolean(config.geminiApiKey),
+      vision: Boolean(config.grok.visionApiKey || config.geminiApiKey),
+      reasoning: Boolean(config.grok.reasoningApiKey || config.geminiApiKey),
+      decision: Boolean(config.grok.decisionApiKey || config.geminiApiKey)
     },
     models: {
-      vision: config.grok.visionModel,
-      reasoning: config.grok.reasoningModel,
-      decision: config.grok.decisionModel
+      gemini: config.geminiModel,
+      vision: config.grok.visionApiKey ? config.grok.visionModel : config.geminiModel,
+      reasoning: config.grok.reasoningApiKey ? config.grok.reasoningModel : config.geminiModel,
+      decision: config.grok.decisionApiKey ? config.grok.decisionModel : config.geminiModel
     },
     apiBase: config.grok.apiBase
   });

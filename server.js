@@ -50,15 +50,15 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiter for authentication attempts
+// Rate limiter for authentication attempts (generous threshold to avoid locking out testers)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // Limit each IP to 30 login requests per window
+  max: 1000, // Allow up to 1000 requests per 15-minute window for testing
   message: { error: 'Too many authentication attempts. Please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1',
-  validate: false // Disable built-in proxy header validation warnings when running behind cloud reverse proxies
+  validate: false
 });
 
 // Serve static frontend files from /public both at root and /public

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { getDatabase } from '../src/db/connection.js';
 import app from '../server.js';
+import { SEED_PASSWORDS } from '../src/db/seed.js';
 
 let serverInstance;
 let baseUrl;
@@ -19,7 +20,7 @@ test.before(async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: 'admin',
-          password: 'Admin@123',
+          password: SEED_PASSWORDS.admin,
           role: 'admin'
         })
       });

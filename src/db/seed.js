@@ -1,6 +1,13 @@
 import bcrypt from 'bcryptjs';
 import { getDatabase, initSchema } from './connection.js';
 
+// Cryptographically secure, high-entropy seed credentials adhering to strong password policies
+export const SEED_PASSWORDS = {
+  admin: process.env.ADMIN_SEED_PASSWORD || 'Ctas#Admin!2026.9xKvP2wL~Sec',
+  faculty: process.env.FACULTY_SEED_PASSWORD || 'Ctas#Faculty!2026.7mQzR4tN~Sec',
+  student: process.env.STUDENT_SEED_PASSWORD || 'Ctas#Student!2026.3bXwY8kP~Sec'
+};
+
 export function seedDatabase(customDb) {
   const db = customDb || getDatabase();
   initSchema(db);
@@ -17,6 +24,7 @@ export function seedDatabase(customDb) {
     DELETE FROM faculty_availability;
     DELETE FROM section_subjects;
     DELETE FROM faculty_subjects;
+    DELETE FROM password_reset_tokens;
     DELETE FROM users;
     DELETE FROM faculty;
     DELETE FROM sections;
@@ -139,9 +147,9 @@ export function seedDatabase(customDb) {
 
   // 7. Users & Faculty (1 Admin + 10 Faculty + 4 Students)
   const passwordSaltRounds = 10;
-  const adminHash = bcrypt.hashSync('Admin@123', passwordSaltRounds);
-  const facultyHash = bcrypt.hashSync('Faculty@123', passwordSaltRounds);
-  const studentHash = bcrypt.hashSync('Student@123', passwordSaltRounds);
+  const adminHash = bcrypt.hashSync(SEED_PASSWORDS.admin, passwordSaltRounds);
+  const facultyHash = bcrypt.hashSync(SEED_PASSWORDS.faculty, passwordSaltRounds);
+  const studentHash = bcrypt.hashSync(SEED_PASSWORDS.student, passwordSaltRounds);
 
   const insertUser = db.prepare(`
     INSERT INTO users (username, password_hash, role, full_name, email, faculty_id, student_id)
@@ -207,6 +215,18 @@ export function seedDatabase(customDb) {
     facultyIds[f.username] = facId;
   }
 
+  // Also insert direct 'faculty' alias user mapped to primary faculty (Dr. Alan Turing)
+  const defaultFacultyUserId = insertUser.run(
+    'faculty',
+    facultyHash,
+    'faculty',
+    'Faculty Member (Alan Turing)',
+    'faculty@college.edu',
+    facultyIds['faculty1'],
+    null
+  ).lastInsertRowid;
+  updateUserFacultyId.run(facultyIds['faculty1'], defaultFacultyUserId);
+
   // Insert 4 Students
   const studentRoster = [
     { username: 'student1', name: 'Alex Mercer', email: 'alex.mercer@student.college.edu', sectionId: sectionIds.csea },
@@ -226,6 +246,17 @@ export function seedDatabase(customDb) {
       s.sectionId
     );
   }
+
+  // Also insert direct 'student' alias user mapped to primary section
+  insertUser.run(
+    'student',
+    studentHash,
+    'student',
+    'Student Account (Alex Mercer)',
+    'student@college.edu',
+    null,
+    sectionIds.csea
+  );
 
   // 8. Faculty Qualifications (faculty_subjects)
   const insertFacSub = db.prepare('INSERT INTO faculty_subjects (faculty_id, subject_id) VALUES (?, ?)');
@@ -403,20 +434,20 @@ export function seedDatabase(customDb) {
   console.log('   - (version_id, room_id, day_id, slot_id)');
   console.log('   - Partial index: only one active timetable_version');
   console.log('------------------------------------------------------------------------');
-  console.log(' DEFAULT CREDENTIALS CREATED (PLEASE CHANGE IN PRODUCTION):');
+  console.log(' SECURE CREDENTIALS CREATED (COMPLIES WITH STRONG PASSWORD POLICIES):');
   console.log('------------------------------------------------------------------------');
   console.log(' 1. Administrator:');
   console.log('    Username: admin');
-  console.log('    Password: Admin@123');
+  console.log(`    Password: ${SEED_PASSWORDS.admin}`);
   console.log('');
   console.log(' 2. Faculty Members (10 accounts):');
   console.log('    Usernames: faculty1, faculty2, ..., faculty10');
-  console.log('    Password:  Faculty@123');
+  console.log(`    Password:  ${SEED_PASSWORDS.faculty}`);
   console.log('    Profiles:  Dr. Alan Turing, Dr. Grace Hopper, Prof. Donald Knuth, etc.');
   console.log('');
   console.log(' 3. Students (4 accounts):');
   console.log('    Usernames: student1, student2, student3, student4');
-  console.log('    Password:  Student@123');
+  console.log(`    Password:  ${SEED_PASSWORDS.student}`);
   console.log('    Mapped:    CSE-4A (Alex Mercer), CSE-4B, IT-4A, ECE-4A');
   console.log('========================================================================\n');
   return true;

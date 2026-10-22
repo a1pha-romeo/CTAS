@@ -1,6 +1,7 @@
 import config from '../../config/env.js';
 import { getDatabase } from '../../db/connection.js';
 import { callGrok } from './grokClient.js';
+import { getGeminiClient } from './geminiClient.js';
 import { findEligibleSubstitutes, assignSubstitution } from '../substitution.js';
 import { validateTimetable } from '../validator.js';
 import { broadcast } from '../sse.js';
@@ -44,11 +45,10 @@ export async function rankSubstituteOptions(timetableEntryId, dateStr, adminUser
     };
   }
 
-  const isAiActive = Boolean(config.grok.decisionApiKey);
+  const gemini = getGeminiClient();
+  const isGrokActive = Boolean(config.grok.decisionApiKey);
 
-  if (isAiActive) {
-    try {
-      const prompt = `
+  const prompt = `
 You are the Chief Academic Scheduling Officer.
 Evaluate these candidate faculty members to substitute for an absent colleague's class.
 All candidates have already passed hard conflict checks.
@@ -86,12 +86,55 @@ Return JSON ONLY with this schema:
 }
 `;
 
-      const messages = [{ role: 'user', content: prompt }];
+  // 1. Try Gemini
+  if (gemini) {
+    try {
+      const response = await gemini.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
 
+      const parsed = JSON.parse(response.text?.trim() || '{}');
+      if (parsed.rankedOptions && Array.isArray(parsed.rankedOptions)) {
+        const rankedOptions = parsed.rankedOptions.map((ro, idx) => {
+          const cand = eligibleCandidates.find(c => c.facultyId === ro.facultyId) || eligibleCandidates[idx];
+          return {
+            ...cand,
+            aiRank: ro.rank || idx + 1,
+            aiScore: ro.score,
+            aiSummary: ro.aiSummary
+          };
+        });
+
+        return {
+          success: true,
+          hasCandidates: true,
+          mode: 'gemini_decision',
+          modelUsed: 'gemini-3.8-flash',
+          timetableEntryId,
+          dateStr,
+          entry,
+          chosenOptionId: parsed.chosenOptionId || rankedOptions[0]?.facultyId,
+          rankedOptions,
+          justification: parsed.justification || 'Candidate selected based on optimal qualification and workload balancing.',
+          risks: parsed.risks || []
+        };
+      }
+    } catch (err) {
+      console.warn('[DecisionManager] Gemini Decision call failed, trying Grok fallback:', err.message);
+    }
+  }
+
+  // 2. Try Grok
+  if (isGrokActive) {
+    try {
       const rawResponse = await callGrok({
         apiKey: config.grok.decisionApiKey,
         model: config.grok.decisionModel,
-        messages,
+        messages: [{ role: 'user', content: prompt }],
         temperature: 0.1
       });
 

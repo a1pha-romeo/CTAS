@@ -10,11 +10,12 @@ export async function login(username, password, role) {
 
     showToast(`Welcome, ${data.user.fullName || data.user.username}!`, 'success');
 
-    // Route to role-specific dashboard
+    // Route to actual user role dashboard
+    const targetRole = data?.user?.role || role || 'admin';
     setTimeout(() => {
-      if (role === 'admin') window.location.href = '/admin/';
-      else if (role === 'faculty') window.location.href = '/faculty/';
-      else if (role === 'student') window.location.href = '/student/';
+      if (targetRole === 'admin') window.location.href = '/admin/';
+      else if (targetRole === 'faculty') window.location.href = '/faculty/';
+      else if (targetRole === 'student') window.location.href = '/student/';
       else window.location.href = '/';
     }, 350);
 

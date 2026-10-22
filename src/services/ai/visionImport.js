@@ -4,6 +4,7 @@ import { z } from 'zod';
 import config from '../../config/env.js';
 import { getDatabase } from '../../db/connection.js';
 import { callGrok } from './grokClient.js';
+import { getGeminiClient } from './geminiClient.js';
 import { validateTimetable } from '../validator.js';
 
 // Zod schema for structured timetable extraction
@@ -222,18 +223,18 @@ function getSampleExtractedTimetable(sectionName = 'CSE-4A') {
  * Converts an image file into structured timetable grid cells
  */
 export async function parseTimetableImage(imageFilePath, mimeType = 'image/png', options = {}) {
-  const isAiActive = Boolean(config.grok.visionApiKey);
+  const gemini = getGeminiClient();
+  const isGrokActive = Boolean(config.grok.visionApiKey);
+  const isAiActive = Boolean(gemini || isGrokActive);
 
-  if (!isAiActive || !imageFilePath) {
-    console.log('[VisionImport] Using deterministic OCR template parser.');
+  if (!imageFilePath) {
+    console.log('[VisionImport] Using deterministic OCR template parser (no file uploaded or sample selected).');
     const sampleData = getSampleExtractedTimetable(options.sectionName || 'CSE-4A');
     const matched = fuzzyMatchEntities(sampleData.cells, options.sectionId);
     return {
       success: true,
       mode: !isAiActive ? 'deterministic_fallback' : 'sample_template',
-      message: !isAiActive
-        ? 'Grok Vision API key not configured. Loaded realistic sample timetable extraction for interactive review.'
-        : 'Sample timetable extracted for interactive review.',
+      message: 'Sample timetable extracted for interactive review.',
       sectionName: sampleData.sectionName,
       ...matched
     };
@@ -268,64 +269,114 @@ Rules:
 3. Return valid JSON only, without markdown backticks.
 `;
 
-    const messages = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${mimeType};base64,${base64Data}`
+    // 1. Try Gemini Vision
+    if (gemini) {
+      try {
+        const response = await gemini.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: mimeType || 'image/png',
+                data: base64Data
+              }
             }
+          ],
+          config: {
+            responseMimeType: 'application/json'
           }
-        ]
+        });
+
+        const cleanJson = response.text?.trim() || '{}';
+        const parsed = JSON.parse(cleanJson);
+        const validated = TimetableGridSchema.parse(parsed);
+        const matched = fuzzyMatchEntities(validated.cells, options.sectionId);
+
+        return {
+          success: true,
+          mode: 'gemini_vision',
+          modelUsed: 'gemini-3.8-flash',
+          sectionName: validated.sectionName,
+          ...matched
+        };
+      } catch (err) {
+        console.warn('[VisionImport] Gemini Vision call failed, attempting Grok fallback:', err.message);
       }
-    ];
+    }
 
-    let rawResponse = await callGrok({
-      apiKey: config.grok.visionApiKey,
-      model: config.grok.visionModel,
-      messages,
-      temperature: 0.1
-    });
+    // 2. Try Grok Vision
+    if (isGrokActive) {
+      const messages = [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mimeType};base64,${base64Data}`
+              }
+            }
+          ]
+        }
+      ];
 
-    // Clean any markdown formatting
-    let cleanJson = rawResponse.trim();
-    if (cleanJson.startsWith('```json')) cleanJson = cleanJson.slice(7);
-    if (cleanJson.startsWith('```')) cleanJson = cleanJson.slice(3);
-    if (cleanJson.endsWith('```')) cleanJson = cleanJson.slice(0, -3);
-    cleanJson = cleanJson.trim();
-
-    let parsed;
-    try {
-      parsed = JSON.parse(cleanJson);
-    } catch {
-      // Retry once if invalid JSON
-      console.warn('[VisionImport] Initial JSON parse failed. Retrying with strict instruction...');
-      messages.push({ role: 'assistant', content: rawResponse });
-      messages.push({ role: 'user', content: 'Output the pure JSON object only, without any commentary or extra characters.' });
-      const retryResponse = await callGrok({
+      let rawResponse = await callGrok({
         apiKey: config.grok.visionApiKey,
         model: config.grok.visionModel,
         messages,
         temperature: 0.1
       });
-      let retryClean = retryResponse.trim();
-      if (retryClean.startsWith('```json')) retryClean = retryClean.slice(7);
-      if (retryClean.startsWith('```')) retryClean = retryClean.slice(3);
-      if (retryClean.endsWith('```')) retryClean = retryClean.slice(0, -3);
-      parsed = JSON.parse(retryClean.trim());
+
+      // Clean any markdown formatting
+      let cleanJson = rawResponse.trim();
+      if (cleanJson.startsWith('```json')) cleanJson = cleanJson.slice(7);
+      if (cleanJson.startsWith('```')) cleanJson = cleanJson.slice(3);
+      if (cleanJson.endsWith('```')) cleanJson = cleanJson.slice(0, -3);
+      cleanJson = cleanJson.trim();
+
+      let parsed;
+      try {
+        parsed = JSON.parse(cleanJson);
+      } catch {
+        // Retry once if invalid JSON
+        console.warn('[VisionImport] Initial JSON parse failed. Retrying with strict instruction...');
+        messages.push({ role: 'assistant', content: rawResponse });
+        messages.push({ role: 'user', content: 'Output the pure JSON object only, without any commentary or extra characters.' });
+        const retryResponse = await callGrok({
+          apiKey: config.grok.visionApiKey,
+          model: config.grok.visionModel,
+          messages,
+          temperature: 0.1
+        });
+        let retryClean = retryResponse.trim();
+        if (retryClean.startsWith('```json')) retryClean = retryClean.slice(7);
+        if (retryClean.startsWith('```')) retryClean = retryClean.slice(3);
+        if (retryClean.endsWith('```')) retryClean = retryClean.slice(0, -3);
+        parsed = JSON.parse(retryClean.trim());
+      }
+
+      const validated = TimetableGridSchema.parse(parsed);
+      const matched = fuzzyMatchEntities(validated.cells, options.sectionId);
+
+      return {
+        success: true,
+        mode: 'grok_vision',
+        modelUsed: config.grok.visionModel,
+        sectionName: validated.sectionName,
+        ...matched
+      };
     }
 
-    const validated = TimetableGridSchema.parse(parsed);
-    const matched = fuzzyMatchEntities(validated.cells, options.sectionId);
-
+    // Fall back to sample if no AI provider configured
+    const sampleData = getSampleExtractedTimetable(options.sectionName || 'CSE-4A');
+    const matched = fuzzyMatchEntities(sampleData.cells, options.sectionId);
     return {
       success: true,
-      mode: 'grok_vision',
-      modelUsed: config.grok.visionModel,
-      sectionName: validated.sectionName,
+      mode: 'deterministic_fallback',
+      message: 'Loaded sample timetable template for interactive review.',
+      sectionName: sampleData.sectionName,
       ...matched
     };
 

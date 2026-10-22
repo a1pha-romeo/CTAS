@@ -219,3 +219,14 @@ CREATE TABLE IF NOT EXISTS ai_issue_log (
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'ignored')),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 20. Password Reset Tokens Table (Secure Time-Limited Tokens)
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT UNIQUE NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0, 1)),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_reset_token ON password_reset_tokens(token);
